@@ -7,6 +7,8 @@ import (
 	api "github.com/flightctl/flightctl/api/v1alpha1"
 	"github.com/flightctl/flightctl/internal/flterrors"
 	"github.com/flightctl/flightctl/internal/util"
+	"github.com/google/uuid"
+	"github.com/lib/pq"
 	"github.com/samber/lo"
 )
 
@@ -178,4 +180,69 @@ func (dl DeviceList) ToApiResource(cont *string, numRemaining *int64) api.Device
 		ret.Metadata.RemainingItemCount = numRemaining
 	}
 	return ret
+}
+
+func (d *Device) GetKind() string {
+	return api.DeviceKind
+}
+
+func (d *Device) GetName() string {
+	return d.Name
+}
+
+func (d *Device) GetOrgID() uuid.UUID {
+	return d.OrgID
+}
+
+func (d *Device) SetOrgID(orgId uuid.UUID) {
+	d.OrgID = orgId
+}
+
+func (d *Device) GetResourceVersion() *int64 {
+	return d.ResourceVersion
+}
+
+func (d *Device) SetResourceVersion(version *int64) {
+	d.ResourceVersion = version
+}
+
+func (d *Device) GetGeneration() *int64 {
+	return d.Generation
+}
+
+func (d *Device) SetGeneration(generation *int64) {
+	d.Generation = generation
+}
+
+func (d *Device) GetOwner() *string {
+	return d.Owner
+}
+
+func (d *Device) SetOwner(owner *string) {
+	d.Owner = owner
+}
+
+func (d *Device) GetLabels() pq.StringArray {
+	return d.Labels
+}
+
+func (d *Device) SetLabels(labels pq.StringArray) {
+	d.Labels = labels
+}
+
+func (d *Device) GetAnnotations() pq.StringArray {
+	return d.Annotations
+}
+
+func (d *Device) SetAnnotations(annotations pq.StringArray) {
+	d.Annotations = annotations
+}
+
+func (d *Device) HasSameSpecAs(otherResource any) bool {
+	otherDev, ok := otherResource.(*Device) // Assert that the other resource is a *Device
+	if !ok {
+		return false // Not the same type, so specs cannot be the same
+	}
+
+	return api.DeviceSpecsAreEqual(d.Spec.Data, otherDev.Spec.Data)
 }

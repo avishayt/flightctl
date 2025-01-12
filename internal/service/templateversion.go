@@ -164,6 +164,29 @@ func (h *ServiceHandler) ReadTemplateVersion(ctx context.Context, request server
 	}
 }
 
+// Used internally to get the latest TemplateVersion for the specified fleet
+func (h *ServiceHandler) ReadLatestTemplateVersion(ctx context.Context, request server.ReadTemplateVersionRequestObject) (server.ReadTemplateVersionResponseObject, error) {
+	allowed, err := auth.GetAuthZ().CheckPermission(ctx, "fleets/templateversions", "get")
+	if err != nil {
+		h.log.WithError(err).Error("failed to check authorization permission")
+		return server.ReadTemplateVersion503JSONResponse{Message: AuthorizationServerUnavailable}, nil
+	}
+	if !allowed {
+		return server.ReadTemplateVersion403JSONResponse{Message: Forbidden}, nil
+	}
+	orgId := store.NullOrgId
+
+	result, err := h.store.TemplateVersion().GetLatest(ctx, orgId, request.Fleet)
+	switch err {
+	case nil:
+		return server.ReadTemplateVersion200JSONResponse(*result), nil
+	case flterrors.ErrResourceNotFound:
+		return server.ReadTemplateVersion404JSONResponse{}, nil
+	default:
+		return nil, err
+	}
+}
+
 // (DELETE /api/v1/fleets/{fleet}/templateVersions/{name})
 func (h *ServiceHandler) DeleteTemplateVersion(ctx context.Context, request server.DeleteTemplateVersionRequestObject) (server.DeleteTemplateVersionResponseObject, error) {
 	allowed, err := auth.GetAuthZ().CheckPermission(ctx, "fleets/templateversions", "delete")

@@ -9,18 +9,18 @@ import (
 
 	api "github.com/flightctl/flightctl/api/v1alpha1"
 	"github.com/flightctl/flightctl/internal/flterrors"
-	"github.com/flightctl/flightctl/internal/store"
-	"github.com/flightctl/flightctl/internal/store/selector"
+	"github.com/flightctl/flightctl/internal/service"
+	"github.com/flightctl/flightctl/internal/tasks_client"
 	"github.com/flightctl/flightctl/internal/util"
 	"github.com/sirupsen/logrus"
 )
 
-func fleetRollout(ctx context.Context, resourceRef *ResourceReference, store store.Store, callbackManager CallbackManager, log logrus.FieldLogger) error {
-	if resourceRef.Op != FleetRolloutOpUpdate {
+func fleetRollout(ctx context.Context, resourceRef *tasks_client.ResourceReference, serviceHandler *service.ServiceHandler, callbackManager tasks_client.CallbackManager, log logrus.FieldLogger) error {
+	if resourceRef.Op != tasks_client.FleetRolloutOpUpdate {
 		log.Errorf("received unknown op %s", resourceRef.Op)
 		return nil
 	}
-	logic := NewFleetRolloutsLogic(callbackManager, log, store, *resourceRef)
+	logic := NewFleetRolloutsLogic(callbackManager, log, serviceHandler, *resourceRef)
 	switch resourceRef.Kind {
 	case api.FleetKind:
 		err := logic.RolloutFleet(ctx)
@@ -40,23 +40,19 @@ func fleetRollout(ctx context.Context, resourceRef *ResourceReference, store sto
 }
 
 type FleetRolloutsLogic struct {
-	callbackManager CallbackManager
+	callbackManager tasks_client.CallbackManager
 	log             logrus.FieldLogger
-	fleetStore      store.Fleet
-	devStore        store.Device
-	tvStore         store.TemplateVersion
-	resourceRef     ResourceReference
+	serviceHandler  *service.ServiceHandler
+	resourceRef     tasks_client.ResourceReference
 	itemsPerPage    int
 	owner           string
 }
 
-func NewFleetRolloutsLogic(callbackManager CallbackManager, log logrus.FieldLogger, storeInst store.Store, resourceRef ResourceReference) FleetRolloutsLogic {
+func NewFleetRolloutsLogic(callbackManager tasks_client.CallbackManager, log logrus.FieldLogger, serviceHandler *service.ServiceHandler, resourceRef tasks_client.ResourceReference) FleetRolloutsLogic {
 	return FleetRolloutsLogic{
 		callbackManager: callbackManager,
 		log:             log,
-		fleetStore:      storeInst.Fleet(),
-		devStore:        storeInst.Device(),
-		tvStore:         storeInst.TemplateVersion(),
+		serviceHandler:  serviceHandler,
 		resourceRef:     resourceRef,
 		itemsPerPage:    ItemsPerPage,
 	}
@@ -69,34 +65,29 @@ func (f *FleetRolloutsLogic) SetItemsPerPage(items int) {
 func (f FleetRolloutsLogic) RolloutFleet(ctx context.Context) error {
 	f.log.Infof("Rolling out fleet %s/%s", f.resourceRef.OrgID, f.resourceRef.Name)
 
-	templateVersion, err := f.tvStore.GetLatest(ctx, f.resourceRef.OrgID, f.resourceRef.Name)
+	templateVersion, err := getLatestTemplateVersion(ctx, f.serviceHandler, f.resourceRef.Name)
 	if err != nil {
-		return fmt.Errorf("failed to get templateVersion: %w", err)
+		return err
 	}
 
 	failureCount := 0
 	owner := util.SetResourceOwner(api.FleetKind, f.resourceRef.Name)
 	f.owner = *owner
 
-	fs, err := selector.NewFieldSelectorFromMap(map[string]string{"metadata.owner": *owner}, false)
-	if err != nil {
-		return err
-	}
-
-	listParams := store.ListParams{
-		Limit:         ItemsPerPage,
-		FieldSelector: fs,
+	listParams := api.ListDevicesParams{
+		Limit:         util.Int32ToPtr(ItemsPerPage),
+		FieldSelector: util.StrToPtr(fmt.Sprintf("metadata.owner=%s", *owner)),
 	}
 
 	for {
-		devices, err := f.devStore.List(ctx, f.resourceRef.OrgID, listParams)
+		deviceList, err := listDevices(ctx, f.serviceHandler, listParams)
 		if err != nil {
 			// TODO: Retry when we have a mechanism that allows it
-			return fmt.Errorf("failed fetching devices: %w", err)
+			return err
 		}
 
-		for devIndex := range devices.Items {
-			device := &devices.Items[devIndex]
+		for devIndex := range deviceList.Items {
+			device := &deviceList.Items[devIndex]
 			err = f.updateDeviceToFleetTemplate(ctx, device, templateVersion)
 			if err != nil {
 				f.log.Errorf("failed to update target generation for device %s (fleet %s): %v", *device.Metadata.Name, f.resourceRef.Name, err)
@@ -104,14 +95,10 @@ func (f FleetRolloutsLogic) RolloutFleet(ctx context.Context) error {
 			}
 		}
 
-		if devices.Metadata.Continue == nil {
+		if deviceList.Metadata.Continue == nil {
 			break
 		} else {
-			cont, err := store.ParseContinueString(devices.Metadata.Continue)
-			if err != nil {
-				return fmt.Errorf("failed to parse continuation for paging: %w", err)
-			}
-			listParams.Continue = cont
+			listParams.Continue = deviceList.Metadata.Continue
 		}
 	}
 
@@ -127,9 +114,9 @@ func (f FleetRolloutsLogic) RolloutFleet(ctx context.Context) error {
 func (f FleetRolloutsLogic) RolloutDevice(ctx context.Context) error {
 	f.log.Infof("Rolling out device %s/%s", f.resourceRef.OrgID, f.resourceRef.Name)
 
-	device, err := f.devStore.Get(ctx, f.resourceRef.OrgID, f.resourceRef.Name)
+	device, err := getDevice(ctx, f.serviceHandler, f.resourceRef.Name)
 	if err != nil {
-		return fmt.Errorf("failed to get device: %w", err)
+		return err
 	}
 
 	if device.Metadata.Owner == nil || len(*device.Metadata.Owner) == 0 {
@@ -149,9 +136,9 @@ func (f FleetRolloutsLogic) RolloutDevice(ctx context.Context) error {
 	}
 	f.owner = *device.Metadata.Owner
 
-	templateVersion, err := f.tvStore.GetLatest(ctx, f.resourceRef.OrgID, ownerName)
+	templateVersion, err := getLatestTemplateVersion(ctx, f.serviceHandler, ownerName)
 	if err != nil {
-		return fmt.Errorf("failed to get templateVersion: %w", err)
+		return err
 	}
 
 	return f.updateDeviceToFleetTemplate(ctx, device, templateVersion)

@@ -1,4 +1,4 @@
-package tasks
+package tasks_client
 
 import (
 	"encoding/json"
@@ -6,6 +6,7 @@ import (
 	"reflect"
 
 	api "github.com/flightctl/flightctl/api/v1alpha1"
+	"github.com/flightctl/flightctl/internal/consts"
 	"github.com/flightctl/flightctl/internal/store/model"
 	"github.com/flightctl/flightctl/internal/util"
 	"github.com/flightctl/flightctl/pkg/queues"
@@ -48,7 +49,7 @@ type callbackManager struct {
 }
 
 func TaskQueuePublisher(provider queues.Provider) (queues.Publisher, error) {
-	publisher, err := provider.NewPublisher(TaskQueue)
+	publisher, err := provider.NewPublisher(consts.TaskQueue)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create publisher: %w", err)
 	}

@@ -10,6 +10,7 @@ import (
 	"github.com/flightctl/flightctl/internal/store"
 	"github.com/flightctl/flightctl/internal/store/model"
 	"github.com/flightctl/flightctl/internal/tasks"
+	"github.com/flightctl/flightctl/internal/tasks_client"
 	"github.com/flightctl/flightctl/internal/util"
 	flightlog "github.com/flightctl/flightctl/pkg/log"
 	"github.com/flightctl/flightctl/pkg/queues"
@@ -29,7 +30,7 @@ var _ = Describe("FleetValidate", func() {
 		storeInst        store.Store
 		cfg              *config.Config
 		dbName           string
-		callbackManager  tasks.CallbackManager
+		callbackManager  tasks_client.CallbackManager
 		fleet            *api.Fleet
 		repository       *api.Repository
 		goodGitConfig    *api.GitConfigProviderSpec
@@ -49,7 +50,7 @@ var _ = Describe("FleetValidate", func() {
 		ctrl := gomock.NewController(GinkgoT())
 		publisher := queues.NewMockPublisher(ctrl)
 		publisher.EXPECT().Publish(gomock.Any()).Return(nil).AnyTimes()
-		callbackManager = tasks.NewCallbackManager(publisher, log)
+		callbackManager = tasks_client.NewCallbackManager(publisher, log)
 
 		spec := api.RepositorySpec{}
 		err := spec.FromGenericRepoSpec(api.GenericRepoSpec{
@@ -143,7 +144,7 @@ var _ = Describe("FleetValidate", func() {
 
 	When("a Fleet has a valid configuration", func() {
 		It("creates a new TemplateVersion", func() {
-			resourceRef := tasks.ResourceReference{OrgID: orgId, Name: "myfleet", Kind: api.FleetKind}
+			resourceRef := tasks_client.ResourceReference{OrgID: orgId, Name: "myfleet", Kind: api.FleetKind}
 			logic := tasks.NewFleetValidateLogic(callbackManager, log, storeInst, nil, resourceRef)
 
 			gitItem := api.ConfigProviderSpec{}
@@ -196,7 +197,7 @@ var _ = Describe("FleetValidate", func() {
 
 	When("a Fleet has an invalid git configuration", func() {
 		It("sets an error Condition", func() {
-			resourceRef := tasks.ResourceReference{OrgID: orgId, Name: "myfleet", Kind: api.FleetKind}
+			resourceRef := tasks_client.ResourceReference{OrgID: orgId, Name: "myfleet", Kind: api.FleetKind}
 			logic := tasks.NewFleetValidateLogic(callbackManager, log, storeInst, nil, resourceRef)
 
 			gitItem := api.ConfigProviderSpec{}
@@ -247,7 +248,7 @@ var _ = Describe("FleetValidate", func() {
 
 	When("a Fleet has an invalid http configuration", func() {
 		It("sets an error Condition", func() {
-			resourceRef := tasks.ResourceReference{OrgID: orgId, Name: "myfleet", Kind: api.FleetKind}
+			resourceRef := tasks_client.ResourceReference{OrgID: orgId, Name: "myfleet", Kind: api.FleetKind}
 			logic := tasks.NewFleetValidateLogic(callbackManager, log, storeInst, nil, resourceRef)
 
 			gitItem := api.ConfigProviderSpec{}
@@ -298,7 +299,7 @@ var _ = Describe("FleetValidate", func() {
 
 	When("a Fleet has an invalid configuration type", func() {
 		It("sets an error Condition", func() {
-			resourceRef := tasks.ResourceReference{OrgID: orgId, Name: "myfleet", Kind: api.FleetKind}
+			resourceRef := tasks_client.ResourceReference{OrgID: orgId, Name: "myfleet", Kind: api.FleetKind}
 			logic := tasks.NewFleetValidateLogic(callbackManager, log, storeInst, nil, resourceRef)
 
 			gitItem := api.ConfigProviderSpec{}

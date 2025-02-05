@@ -38,6 +38,11 @@ type AuthZMiddleware interface {
 var authZ AuthZMiddleware
 var authN AuthNMiddleware
 
+func SetNilAuth() {
+	authN = NilAuth{}
+	authZ = NilAuth{}
+}
+
 func GetAuthZ() AuthZMiddleware {
 	return authZ
 }
@@ -169,6 +174,11 @@ type K8sToK8sAuth struct {
 }
 
 func (o K8sToK8sAuth) CheckPermission(ctx context.Context, resource string, op string) (bool, error) {
+	// Allow all internal service calls
+	if internal, ok := ctx.Value(common.InternalRequestCtxKey).(bool); ok && internal {
+		return true, nil
+	}
+
 	k8sTokenVal := ctx.Value(common.TokenCtxKey)
 	if k8sTokenVal == nil {
 		return false, nil

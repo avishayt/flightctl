@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 
+	"github.com/flightctl/flightctl/internal/auth/common"
 	"github.com/flightctl/flightctl/pkg/k8sclient"
 	k8sAuthorizationV1 "k8s.io/api/authorization/v1"
 )
@@ -28,6 +29,11 @@ func createSSAR(resource string, verb string, ns string) ([]byte, error) {
 }
 
 func (k8sAuth K8sAuthZ) CheckPermission(ctx context.Context, k8sToken string, resource string, op string) (bool, error) {
+	// Allow all internal service calls
+	if internal, ok := ctx.Value(common.InternalRequestCtxKey).(bool); ok && internal {
+		return true, nil
+	}
+
 	body, err := createSSAR(resource, op, k8sAuth.Namespace)
 	if err != nil {
 		return false, err

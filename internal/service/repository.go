@@ -279,3 +279,22 @@ func (h *ServiceHandler) PatchRepository(ctx context.Context, request server.Pat
 		return nil, err
 	}
 }
+
+// Not exposed via REST API; accepts and returns API objects rather than server objects
+func (h *ServiceHandler) ReplaceRepositoryStatus(ctx context.Context, repository *api.Repository) (*api.Repository, error) {
+	allowed, err := auth.GetAuthZ().CheckPermission(ctx, "repositories/status", "update")
+	if err != nil {
+		h.log.WithError(err).Error("failed to check authorization permission")
+		return nil, fmt.Errorf("failed to check authorization permission: %w", err)
+	}
+	if !allowed {
+		return nil, fmt.Errorf("operation not allowed: %w", err)
+	}
+	orgId := store.NullOrgId
+
+	result, err := h.store.Repository().UpdateStatus(ctx, orgId, repository)
+	if err != nil {
+		return nil, err
+	}
+	return result, nil
+}

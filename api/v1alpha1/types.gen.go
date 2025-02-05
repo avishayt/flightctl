@@ -1554,8 +1554,8 @@ type ListRepositoriesParams struct {
 	Limit *int32 `form:"limit,omitempty" json:"limit,omitempty"`
 }
 
-// ListResourceSyncParams defines parameters for ListResourceSync.
-type ListResourceSyncParams struct {
+// ListResourceSyncsParams defines parameters for ListResourceSyncs.
+type ListResourceSyncsParams struct {
 	// Continue An optional parameter to query more results from the server. The value of the paramter must match the value of the 'continue' field in the previous list response.
 	Continue *string `form:"continue,omitempty" json:"continue,omitempty"`
 

@@ -14,7 +14,6 @@ import (
 	"github.com/flightctl/flightctl/internal/service"
 	"github.com/flightctl/flightctl/internal/service/common"
 	"github.com/flightctl/flightctl/internal/store"
-	"github.com/flightctl/flightctl/internal/store/model"
 	"github.com/flightctl/flightctl/internal/store/selector"
 	"github.com/flightctl/flightctl/internal/tasks_client"
 	"github.com/flightctl/flightctl/internal/util"
@@ -58,31 +57,31 @@ func (r *ResourceSync) Poll() {
 
 	log.Info("Running ResourceSync Polling")
 
-	resourcesyncs, err := r.store.ResourceSync().ListIgnoreOrg()
+	resourcesyncs, err := listResourceSyncs(ctx, r.serviceHandler, api.ListResourceSyncsParams{})
 	if err != nil {
 		log.Errorf("error fetching resourcesyncs: %s", err)
 		return
 	}
 
-	for i := range resourcesyncs {
-		rs := &resourcesyncs[i]
+	for i := range resourcesyncs.Items {
+		rs := &resourcesyncs.Items[i]
 		_ = r.run(ctx, log, rs)
 	}
 }
 
-func (r *ResourceSync) run(ctx context.Context, log logrus.FieldLogger, rs *model.ResourceSync) error {
-	defer r.updateResourceSyncStatus(rs)
-	reponame := rs.Spec.Data.Repository
+func (r *ResourceSync) run(ctx context.Context, log logrus.FieldLogger, rs *api.ResourceSync) error {
+	defer r.updateResourceSyncStatus(ctx, rs)
+	reponame := rs.Spec.Repository
 	repo, err := getRepository(ctx, r.serviceHandler, reponame)
 	if err != nil {
 		// Failed to fetch Repository resource
-		rs.AddRepoNotFoundCondition(err)
+		addRepoNotFoundCondition(rs, err)
 		return err
 	}
-	rs.AddRepoNotFoundCondition(nil)
+	addRepoNotFoundCondition(rs, nil)
 	resources, err := r.parseAndValidateResources(rs, repo, CloneGitRepo)
 	if err != nil {
-		log.Errorf("resourcesync/%s: parsing failed. error: %s", rs.Name, err.Error())
+		log.Errorf("resourcesync/%s: parsing failed. error: %s", *rs.Metadata.Name, err.Error())
 		return err
 	}
 	if resources == nil {
@@ -90,15 +89,15 @@ func (r *ResourceSync) run(ctx context.Context, log logrus.FieldLogger, rs *mode
 		return nil
 	}
 
-	owner := util.SetResourceOwner(api.ResourceSyncKind, rs.Name)
+	owner := util.SetResourceOwner(api.ResourceSyncKind, *rs.Metadata.Name)
 	fleets, err := r.parseFleets(resources, owner)
 	if err != nil {
-		err := fmt.Errorf("resourcesync/%s: error: %w", rs.Name, err)
+		err := fmt.Errorf("resourcesync/%s: error: %w", *rs.Metadata.Name, err)
 		log.Errorf("%e", err)
-		rs.AddResourceParsedCondition(err)
+		addResourceParsedCondition(rs, err)
 		return err
 	}
-	rs.AddResourceParsedCondition(nil)
+	addResourceParsedCondition(rs, nil)
 
 	fleetsPreOwned := make([]api.Fleet, 0)
 
@@ -112,9 +111,9 @@ func (r *ResourceSync) run(ctx context.Context, log logrus.FieldLogger, rs *mode
 		FieldSelector: fs,
 	}
 	for {
-		listRes, err := r.store.Fleet().List(ctx, rs.OrgID, listParams)
+		listRes, err := r.store.Fleet().List(ctx, store.NullOrgId, listParams)
 		if err != nil {
-			err := fmt.Errorf("resourcesync/%s: failed to list owned fleets. error: %w", rs.Name, err)
+			err := fmt.Errorf("resourcesync/%s: failed to list owned fleets. error: %w", *rs.Metadata.Name, err)
 			log.Errorf("%e", err)
 			return err
 		}
@@ -124,35 +123,35 @@ func (r *ResourceSync) run(ctx context.Context, log logrus.FieldLogger, rs *mode
 		}
 		cont, err := store.ParseContinueString(listRes.Metadata.Continue)
 		if err != nil {
-			return fmt.Errorf("resourcesync/%s: failed to parse continuation for paging: %w", rs.Name, err)
+			return fmt.Errorf("resourcesync/%s: failed to parse continuation for paging: %w", *rs.Metadata.Name, err)
 		}
 		listParams.Continue = cont
 	}
 
 	fleetsToRemove := fleetsDelta(fleetsPreOwned, fleets)
 
-	r.log.Infof("resourcesync/%s: applying #%d fleets ", rs.Name, len(fleets))
-	err = r.createOrUpdateMultiple(ctx, rs.OrgID, fleets...)
+	r.log.Infof("resourcesync/%s: applying #%d fleets ", *rs.Metadata.Name, len(fleets))
+	err = r.createOrUpdateMultiple(ctx, store.NullOrgId, fleets...)
 	if err == flterrors.ErrUpdatingResourceWithOwnerNotAllowed {
 		err = fmt.Errorf("one or more fleets are managed by a different resource. %w", err)
 	}
 	if len(fleetsToRemove) > 0 {
-		r.log.Infof("resourcesync/%s: found #%d fleets to remove. removing\n", rs.Name, len(fleetsToRemove))
+		r.log.Infof("resourcesync/%s: found #%d fleets to remove. removing\n", *rs.Metadata.Name, len(fleetsToRemove))
 		for _, fleetToRemove := range fleetsToRemove {
-			err := r.store.Fleet().Delete(ctx, rs.OrgID, fleetToRemove, r.callbackManager.FleetUpdatedCallback)
+			err := r.store.Fleet().Delete(ctx, store.NullOrgId, fleetToRemove, r.callbackManager.FleetUpdatedCallback)
 			if err != nil {
-				log.Errorf("resourcesync/%s: failed to remove old fleet %s/%s. error: %s", rs.Name, rs.OrgID, fleetToRemove, err.Error())
+				log.Errorf("resourcesync/%s: failed to remove old fleet %s/%s. error: %s", *rs.Metadata.Name, store.NullOrgId, fleetToRemove, err.Error())
 				return err
 			}
 		}
 	}
-	rs.AddSyncedCondition(err)
+	addSyncedCondition(rs, err)
 	if err != nil {
-		log.Errorf("resourcesync/%s: failed to apply resource. error: %s", rs.Name, err.Error())
+		log.Errorf("resourcesync/%s: failed to apply resource. error: %s", *rs.Metadata.Name, err.Error())
 		return err
 	}
-	rs.Status.Data.ObservedGeneration = rs.Generation
-	r.log.Infof("resourcesync/%s: #%d fleets applied successfully\n", rs.Name, len(fleets))
+	rs.Status.ObservedGeneration = rs.Metadata.Generation
+	r.log.Infof("resourcesync/%s: #%d fleets applied successfully\n", *rs.Metadata.Name, len(fleets))
 	return nil
 }
 
@@ -188,34 +187,34 @@ func fleetsDelta(owned []api.Fleet, newOwned []*api.Fleet) []string {
 	return dfleets
 }
 
-func (r *ResourceSync) parseAndValidateResources(rs *model.ResourceSync, repo *api.Repository, gitCloneRepo cloneGitRepoFunc) ([]genericResourceMap, error) {
-	path := rs.Spec.Data.Path
-	revision := rs.Spec.Data.TargetRevision
+func (r *ResourceSync) parseAndValidateResources(rs *api.ResourceSync, repo *api.Repository, gitCloneRepo cloneGitRepoFunc) ([]genericResourceMap, error) {
+	path := rs.Spec.Path
+	revision := rs.Spec.TargetRevision
 	mfs, hash, err := gitCloneRepo(repo, &revision, lo.ToPtr(1))
 	if err != nil {
 		// Cant fetch git repo
-		rs.AddRepoAccessCondition(err)
+		addRepoAccessCondition(rs, err)
 		return nil, err
 	}
-	rs.AddRepoAccessCondition(nil)
+	addRepoAccessCondition(rs, nil)
 
-	if !rs.NeedsSyncToHash(hash) {
+	if !needsSyncToHash(rs, hash) {
 		// nothing to update
-		r.log.Infof("resourcesync/%s: No new commits or path. skipping", rs.Name)
+		r.log.Infof("resourcesync/%s: No new commits or path. skipping", *rs.Metadata.Name)
 		return nil, nil
 	}
-	rs.AddSyncedCondition(fmt.Errorf("out of sync"))
+	addSyncedCondition(rs, fmt.Errorf("out of sync"))
 
-	rs.Status.Data.ObservedCommit = lo.ToPtr(hash)
+	rs.Status.ObservedCommit = lo.ToPtr(hash)
 
 	// Open files
 	fileInfo, err := mfs.Stat(path)
 	if err != nil {
 		// Can't access path
-		rs.AddPathAccessCondition(err)
+		addPathAccessCondition(rs, err)
 		return nil, err
 	}
-	rs.AddPathAccessCondition(nil)
+	addPathAccessCondition(rs, nil)
 	var resources []genericResourceMap
 	if fileInfo.IsDir() {
 		resources, err = r.extractResourcesFromDir(mfs, path)
@@ -224,11 +223,11 @@ func (r *ResourceSync) parseAndValidateResources(rs *model.ResourceSync, repo *a
 	}
 	if err != nil {
 		// Failed to parse resources
-		rs.AddResourceParsedCondition(err)
+		addResourceParsedCondition(rs, err)
 		return nil, err
 
 	}
-	rs.AddResourceParsedCondition(nil)
+	addResourceParsedCondition(rs, nil)
 	return resources, nil
 }
 
@@ -344,10 +343,10 @@ func (r ResourceSync) parseFleets(resources []genericResourceMap, owner *string)
 	return fleets, nil
 }
 
-func (r *ResourceSync) updateResourceSyncStatus(rs *model.ResourceSync) {
-	err := r.store.ResourceSync().UpdateStatusIgnoreOrg(rs)
+func (r *ResourceSync) updateResourceSyncStatus(ctx context.Context, rs *api.ResourceSync) {
+	_, err := r.serviceHandler.ReplaceResourceSyncStatus(ctx, rs)
 	if err != nil {
-		r.log.Errorf("Failed to update resourcesync status for %s: %v", rs.Name, err)
+		r.log.Errorf("Failed to update resourcesync status for %s: %v", *rs.Metadata.Name, err)
 	}
 }
 
@@ -363,4 +362,58 @@ func isValidFile(filename string) bool {
 		}
 	}
 	return false
+}
+
+// needsSyncToHash returns true if the resource needs to be synced to the given hash.
+func needsSyncToHash(rs *api.ResourceSync, hash string) bool {
+	if rs.Status == nil || rs.Status.Conditions == nil {
+		return true
+	}
+
+	if api.IsStatusConditionFalse(rs.Status.Conditions, api.ResourceSyncSynced) {
+		return true
+	}
+
+	var generation int64 = 0
+	if rs.Metadata.Generation != nil {
+		generation = *rs.Metadata.Generation
+	}
+
+	var observedGen int64 = 0
+	if rs.Status.ObservedGeneration != nil {
+		observedGen = *rs.Status.ObservedGeneration
+	}
+	var prevHash string = util.DefaultIfNil(rs.Status.ObservedCommit, "")
+	return hash != prevHash || observedGen != generation
+}
+
+func ensureConditionsNotNil(rs *api.ResourceSync) {
+	if rs.Status == nil {
+		rs.Status = &api.ResourceSyncStatus{Conditions: []api.Condition{}}
+	}
+}
+
+func setCondition(rs *api.ResourceSync, conditionType api.ConditionType, okReason, failReason string, err error) bool {
+	ensureConditionsNotNil(rs)
+	return api.SetStatusConditionByError(&rs.Status.Conditions, conditionType, okReason, failReason, err)
+}
+
+func addRepoNotFoundCondition(rs *api.ResourceSync, err error) {
+	setCondition(rs, api.ResourceSyncAccessible, "accessible", "repository resource not found", err)
+}
+
+func addRepoAccessCondition(rs *api.ResourceSync, err error) {
+	setCondition(rs, api.ResourceSyncAccessible, "accessible", "failed to clone repository", err)
+}
+
+func addPathAccessCondition(rs *api.ResourceSync, err error) {
+	setCondition(rs, api.ResourceSyncAccessible, "accessible", "path not found in repository", err)
+}
+
+func addResourceParsedCondition(rs *api.ResourceSync, err error) {
+	setCondition(rs, api.ResourceSyncResourceParsed, "Success", "Fail", err)
+}
+
+func addSyncedCondition(rs *api.ResourceSync, err error) {
+	setCondition(rs, api.ResourceSyncSynced, "Success", "Fail", err)
 }

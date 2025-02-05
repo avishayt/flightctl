@@ -309,8 +309,8 @@ type ClientInterface interface {
 	// DeleteResourceSyncs request
 	DeleteResourceSyncs(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// ListResourceSync request
-	ListResourceSync(ctx context.Context, params *ListResourceSyncParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+	// ListResourceSyncs request
+	ListResourceSyncs(ctx context.Context, params *ListResourceSyncsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// CreateResourceSyncWithBody request with any body
 	CreateResourceSyncWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -1309,8 +1309,8 @@ func (c *Client) DeleteResourceSyncs(ctx context.Context, reqEditors ...RequestE
 	return c.Client.Do(req)
 }
 
-func (c *Client) ListResourceSync(ctx context.Context, params *ListResourceSyncParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewListResourceSyncRequest(c.Server, params)
+func (c *Client) ListResourceSyncs(ctx context.Context, params *ListResourceSyncsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListResourceSyncsRequest(c.Server, params)
 	if err != nil {
 		return nil, err
 	}
@@ -4093,8 +4093,8 @@ func NewDeleteResourceSyncsRequest(server string) (*http.Request, error) {
 	return req, nil
 }
 
-// NewListResourceSyncRequest generates requests for ListResourceSync
-func NewListResourceSyncRequest(server string, params *ListResourceSyncParams) (*http.Request, error) {
+// NewListResourceSyncsRequest generates requests for ListResourceSyncs
+func NewListResourceSyncsRequest(server string, params *ListResourceSyncsParams) (*http.Request, error) {
 	var err error
 
 	serverURL, err := url.Parse(server)
@@ -4681,8 +4681,8 @@ type ClientWithResponsesInterface interface {
 	// DeleteResourceSyncsWithResponse request
 	DeleteResourceSyncsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*DeleteResourceSyncsResponse, error)
 
-	// ListResourceSyncWithResponse request
-	ListResourceSyncWithResponse(ctx context.Context, params *ListResourceSyncParams, reqEditors ...RequestEditorFn) (*ListResourceSyncResponse, error)
+	// ListResourceSyncsWithResponse request
+	ListResourceSyncsWithResponse(ctx context.Context, params *ListResourceSyncsParams, reqEditors ...RequestEditorFn) (*ListResourceSyncsResponse, error)
 
 	// CreateResourceSyncWithBodyWithResponse request with any body
 	CreateResourceSyncWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateResourceSyncResponse, error)
@@ -6218,7 +6218,7 @@ func (r DeleteResourceSyncsResponse) StatusCode() int {
 	return 0
 }
 
-type ListResourceSyncResponse struct {
+type ListResourceSyncsResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
 	JSON200      *ResourceSyncList
@@ -6229,7 +6229,7 @@ type ListResourceSyncResponse struct {
 }
 
 // Status returns HTTPResponse.Status
-func (r ListResourceSyncResponse) Status() string {
+func (r ListResourceSyncsResponse) Status() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Status
 	}
@@ -6237,7 +6237,7 @@ func (r ListResourceSyncResponse) Status() string {
 }
 
 // StatusCode returns HTTPResponse.StatusCode
-func (r ListResourceSyncResponse) StatusCode() int {
+func (r ListResourceSyncsResponse) StatusCode() int {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.StatusCode
 	}
@@ -7109,13 +7109,13 @@ func (c *ClientWithResponses) DeleteResourceSyncsWithResponse(ctx context.Contex
 	return ParseDeleteResourceSyncsResponse(rsp)
 }
 
-// ListResourceSyncWithResponse request returning *ListResourceSyncResponse
-func (c *ClientWithResponses) ListResourceSyncWithResponse(ctx context.Context, params *ListResourceSyncParams, reqEditors ...RequestEditorFn) (*ListResourceSyncResponse, error) {
-	rsp, err := c.ListResourceSync(ctx, params, reqEditors...)
+// ListResourceSyncsWithResponse request returning *ListResourceSyncsResponse
+func (c *ClientWithResponses) ListResourceSyncsWithResponse(ctx context.Context, params *ListResourceSyncsParams, reqEditors ...RequestEditorFn) (*ListResourceSyncsResponse, error) {
+	rsp, err := c.ListResourceSyncs(ctx, params, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
-	return ParseListResourceSyncResponse(rsp)
+	return ParseListResourceSyncsResponse(rsp)
 }
 
 // CreateResourceSyncWithBodyWithResponse request with arbitrary body returning *CreateResourceSyncResponse
@@ -10463,15 +10463,15 @@ func ParseDeleteResourceSyncsResponse(rsp *http.Response) (*DeleteResourceSyncsR
 	return response, nil
 }
 
-// ParseListResourceSyncResponse parses an HTTP response from a ListResourceSyncWithResponse call
-func ParseListResourceSyncResponse(rsp *http.Response) (*ListResourceSyncResponse, error) {
+// ParseListResourceSyncsResponse parses an HTTP response from a ListResourceSyncsWithResponse call
+func ParseListResourceSyncsResponse(rsp *http.Response) (*ListResourceSyncsResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
 	defer func() { _ = rsp.Body.Close() }()
 	if err != nil {
 		return nil, err
 	}
 
-	response := &ListResourceSyncResponse{
+	response := &ListResourceSyncsResponse{
 		Body:         bodyBytes,
 		HTTPResponse: rsp,
 	}

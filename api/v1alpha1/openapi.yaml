@@ -101,7 +101,7 @@ paths:
       tags:
         - resourcesync
       description: List ResourceSync resources.
-      operationId: listResourceSync
+      operationId: listResourceSyncs
       parameters:
         - name: continue
           in: query

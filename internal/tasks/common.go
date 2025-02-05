@@ -64,3 +64,18 @@ func listRepositories(ctx context.Context, serviceHandler *service.ServiceHandle
 	}
 	return &repoList, nil
 }
+
+func listResourceSyncs(ctx context.Context, serviceHandler *service.ServiceHandler, params api.ListResourceSyncsParams) (*api.ResourceSyncList, error) {
+	response, err := serviceHandler.ListResourceSyncs(ctx, server.ListResourceSyncsRequestObject{Params: params})
+	if err != nil {
+		return nil, fmt.Errorf("failed fetching resourceSyncs: %w", err)
+	}
+	var rsList api.ResourceSyncList
+	switch resp := response.(type) {
+	case server.ListResourceSyncs200JSONResponse:
+		rsList = api.ResourceSyncList(resp)
+	default:
+		return nil, fmt.Errorf("failed fetching resourceSyncs: %s", server.PrintResponse(resp))
+	}
+	return &rsList, nil
+}

@@ -233,13 +233,13 @@ func (o *GetOptions) Run(ctx context.Context, args []string) error { //nolint:go
 	case kind == ResourceSyncKind && len(name) > 0:
 		response, err = c.ReadResourceSyncWithResponse(ctx, name)
 	case kind == ResourceSyncKind && len(name) == 0:
-		params := api.ListResourceSyncParams{
+		params := api.ListResourceSyncsParams{
 			LabelSelector: util.ToPtrWithNilDefault(o.LabelSelector),
 			FieldSelector: util.ToPtrWithNilDefault(o.FieldSelector),
 			Limit:         util.ToPtrWithNilDefault(o.Limit),
 			Continue:      util.ToPtrWithNilDefault(o.Continue),
 		}
-		response, err = c.ListResourceSyncWithResponse(ctx, &params)
+		response, err = c.ListResourceSyncsWithResponse(ctx, &params)
 	case kind == CertificateSigningRequestKind && len(name) > 0:
 		response, err = c.ReadCertificateSigningRequestWithResponse(ctx, name)
 	case kind == CertificateSigningRequestKind && len(name) == 0:
@@ -346,7 +346,7 @@ func (o *GetOptions) printTable(response interface{}, kind string, name string) 
 	case kind == RepositoryKind && len(name) > 0:
 		o.printRepositoriesTable(w, *(response.(*apiclient.ReadRepositoryResponse).JSON200))
 	case kind == ResourceSyncKind && len(name) == 0:
-		o.printResourceSyncsTable(w, response.(*apiclient.ListResourceSyncResponse).JSON200.Items...)
+		o.printResourceSyncsTable(w, response.(*apiclient.ListResourceSyncsResponse).JSON200.Items...)
 	case kind == ResourceSyncKind && len(name) > 0:
 		o.printResourceSyncsTable(w, *(response.(*apiclient.ReadResourceSyncResponse).JSON200))
 	case kind == CertificateSigningRequestKind && len(name) == 0:

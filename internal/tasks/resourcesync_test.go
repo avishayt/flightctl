@@ -8,7 +8,6 @@ import (
 	api "github.com/flightctl/flightctl/api/v1alpha1"
 	"github.com/flightctl/flightctl/internal/service"
 	"github.com/flightctl/flightctl/internal/store"
-	"github.com/flightctl/flightctl/internal/store/model"
 	"github.com/flightctl/flightctl/internal/tasks_client"
 	"github.com/flightctl/flightctl/internal/util"
 	flightlog "github.com/flightctl/flightctl/pkg/log"
@@ -77,8 +76,8 @@ func TestParseAndValidate_already_in_sync(t *testing.T) {
 	rsTask := NewResourceSync(resourceSyncParams(t))
 
 	// Patch the status so we are already in sync
-	rs.Status.Data.ObservedCommit = &gitRepoCommit
-	rs.Status.Data.ObservedGeneration = lo.ToPtr(int64(1))
+	rs.Status.ObservedCommit = &gitRepoCommit
+	rs.Status.ObservedGeneration = lo.ToPtr(int64(1))
 
 	// Already in sync with hash
 	rm, err := rsTask.parseAndValidateResources(&rs, &repo, testCloneEmptyGitRepo)
@@ -116,7 +115,7 @@ func TestParseAndValidate_singleFile(t *testing.T) {
 	require.NoError(err)
 	rsTask := NewResourceSync(resourceSyncParams(t))
 
-	rs.Spec.Data.Path = "/examples/fleet.yaml"
+	rs.Spec.Path = "/examples/fleet.yaml"
 	resources, err := rsTask.parseAndValidateResources(&rs, &repo, testCloneUnsupportedGitRepo)
 	require.NoError(err)
 	require.Len(resources, 1)
@@ -248,22 +247,18 @@ func TestParseFleet_multiple(t *testing.T) {
 
 }
 
-func testResourceSync() model.ResourceSync {
-	return model.ResourceSync{
-		Resource: model.Resource{
+func testResourceSync() api.ResourceSync {
+	return api.ResourceSync{
+		Metadata: api.ObjectMeta{
+			Name:       lo.ToPtr("rs"),
 			Generation: lo.ToPtr(int64(1)),
-			Name:       *lo.ToPtr("rs"),
 		},
-		Spec: &model.JSONField[api.ResourceSyncSpec]{
-			Data: api.ResourceSyncSpec{
-				Repository: "demoRepo",
-				Path:       "/examples",
-			},
+		Spec: api.ResourceSyncSpec{
+			Repository: "demoRepo",
+			Path:       "/examples",
 		},
-		Status: &model.JSONField[api.ResourceSyncStatus]{
-			Data: api.ResourceSyncStatus{
-				Conditions: []api.Condition{},
-			},
+		Status: &api.ResourceSyncStatus{
+			Conditions: []api.Condition{},
 		},
 	}
 }

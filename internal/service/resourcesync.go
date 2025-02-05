@@ -7,6 +7,7 @@ import (
 	"reflect"
 
 	"github.com/flightctl/flightctl/api/v1alpha1"
+	api "github.com/flightctl/flightctl/api/v1alpha1"
 	"github.com/flightctl/flightctl/internal/api/server"
 	"github.com/flightctl/flightctl/internal/auth"
 	"github.com/flightctl/flightctl/internal/flterrors"
@@ -50,33 +51,33 @@ func (h *ServiceHandler) CreateResourceSync(ctx context.Context, request server.
 }
 
 // (GET /api/v1/resourcesyncs)
-func (h *ServiceHandler) ListResourceSync(ctx context.Context, request server.ListResourceSyncRequestObject) (server.ListResourceSyncResponseObject, error) {
+func (h *ServiceHandler) ListResourceSyncs(ctx context.Context, request server.ListResourceSyncsRequestObject) (server.ListResourceSyncsResponseObject, error) {
 	allowed, err := auth.GetAuthZ().CheckPermission(ctx, "resourcesyncs", "list")
 	if err != nil {
 		h.log.WithError(err).Error("failed to check authorization permission")
-		return server.ListResourceSync503JSONResponse{Message: AuthorizationServerUnavailable}, nil
+		return server.ListResourceSyncs503JSONResponse{Message: AuthorizationServerUnavailable}, nil
 	}
 	if !allowed {
-		return server.ListResourceSync403JSONResponse{Message: Forbidden}, nil
+		return server.ListResourceSyncs403JSONResponse{Message: Forbidden}, nil
 	}
 	orgId := store.NullOrgId
 
 	cont, err := store.ParseContinueString(request.Params.Continue)
 	if err != nil {
-		return server.ListResourceSync400JSONResponse{Message: fmt.Sprintf("failed to parse continue parameter: %v", err)}, nil
+		return server.ListResourceSyncs400JSONResponse{Message: fmt.Sprintf("failed to parse continue parameter: %v", err)}, nil
 	}
 
 	var fieldSelector *selector.FieldSelector
 	if request.Params.FieldSelector != nil {
 		if fieldSelector, err = selector.NewFieldSelector(*request.Params.FieldSelector); err != nil {
-			return server.ListResourceSync400JSONResponse{Message: fmt.Sprintf("failed to parse field selector: %v", err)}, nil
+			return server.ListResourceSyncs400JSONResponse{Message: fmt.Sprintf("failed to parse field selector: %v", err)}, nil
 		}
 	}
 
 	var labelSelector *selector.LabelSelector
 	if request.Params.LabelSelector != nil {
 		if labelSelector, err = selector.NewLabelSelector(*request.Params.LabelSelector); err != nil {
-			return server.ListResourceSync400JSONResponse{Message: fmt.Sprintf("failed to parse label selector: %v", err)}, nil
+			return server.ListResourceSyncs400JSONResponse{Message: fmt.Sprintf("failed to parse label selector: %v", err)}, nil
 		}
 	}
 
@@ -90,19 +91,19 @@ func (h *ServiceHandler) ListResourceSync(ctx context.Context, request server.Li
 		listParams.Limit = store.MaxRecordsPerListRequest
 	}
 	if listParams.Limit > store.MaxRecordsPerListRequest {
-		return server.ListResourceSync400JSONResponse{Message: fmt.Sprintf("limit cannot exceed %d", store.MaxRecordsPerListRequest)}, nil
+		return server.ListResourceSyncs400JSONResponse{Message: fmt.Sprintf("limit cannot exceed %d", store.MaxRecordsPerListRequest)}, nil
 	}
 
 	result, err := h.store.ResourceSync().List(ctx, orgId, listParams)
 	if err == nil {
-		return server.ListResourceSync200JSONResponse(*result), nil
+		return server.ListResourceSyncs200JSONResponse(*result), nil
 	}
 
 	var se *selector.SelectorError
 
 	switch {
 	case selector.AsSelectorError(err, &se):
-		return server.ListResourceSync400JSONResponse{Message: se.Error()}, nil
+		return server.ListResourceSyncs400JSONResponse{Message: se.Error()}, nil
 	default:
 		return nil, err
 	}
@@ -277,4 +278,23 @@ func (h *ServiceHandler) PatchResourceSync(ctx context.Context, request server.P
 	default:
 		return nil, err
 	}
+}
+
+// Not exposed via REST API; accepts and returns API objects rather than server objects
+func (h *ServiceHandler) ReplaceResourceSyncStatus(ctx context.Context, rs *api.ResourceSync) (*api.ResourceSync, error) {
+	allowed, err := auth.GetAuthZ().CheckPermission(ctx, "resourcesyncs/status", "update")
+	if err != nil {
+		h.log.WithError(err).Error("failed to check authorization permission")
+		return nil, fmt.Errorf("failed to check authorization permission: %w", err)
+	}
+	if !allowed {
+		return nil, fmt.Errorf("operation not allowed: %w", err)
+	}
+	orgId := store.NullOrgId
+
+	result, err := h.store.ResourceSync().UpdateStatus(ctx, orgId, rs)
+	if err != nil {
+		return nil, err
+	}
+	return result, nil
 }

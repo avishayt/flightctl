@@ -190,7 +190,7 @@ type ServerInterface interface {
 	DeleteResourceSyncs(w http.ResponseWriter, r *http.Request)
 
 	// (GET /api/v1/resourcesyncs)
-	ListResourceSync(w http.ResponseWriter, r *http.Request, params ListResourceSyncParams)
+	ListResourceSyncs(w http.ResponseWriter, r *http.Request, params ListResourceSyncsParams)
 
 	// (POST /api/v1/resourcesyncs)
 	CreateResourceSync(w http.ResponseWriter, r *http.Request)
@@ -501,7 +501,7 @@ func (_ Unimplemented) DeleteResourceSyncs(w http.ResponseWriter, r *http.Reques
 }
 
 // (GET /api/v1/resourcesyncs)
-func (_ Unimplemented) ListResourceSync(w http.ResponseWriter, r *http.Request, params ListResourceSyncParams) {
+func (_ Unimplemented) ListResourceSyncs(w http.ResponseWriter, r *http.Request, params ListResourceSyncsParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -2132,14 +2132,14 @@ func (siw *ServerInterfaceWrapper) DeleteResourceSyncs(w http.ResponseWriter, r 
 	handler.ServeHTTP(w, r.WithContext(ctx))
 }
 
-// ListResourceSync operation middleware
-func (siw *ServerInterfaceWrapper) ListResourceSync(w http.ResponseWriter, r *http.Request) {
+// ListResourceSyncs operation middleware
+func (siw *ServerInterfaceWrapper) ListResourceSyncs(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	var err error
 
 	// Parameter object where we will unmarshal all parameters from the context
-	var params ListResourceSyncParams
+	var params ListResourceSyncsParams
 
 	// ------------- Optional query parameter "continue" -------------
 
@@ -2174,7 +2174,7 @@ func (siw *ServerInterfaceWrapper) ListResourceSync(w http.ResponseWriter, r *ht
 	}
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ListResourceSync(w, r, params)
+		siw.Handler.ListResourceSyncs(w, r, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -2603,7 +2603,7 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Delete(options.BaseURL+"/api/v1/resourcesyncs", wrapper.DeleteResourceSyncs)
 	})
 	r.Group(func(r chi.Router) {
-		r.Get(options.BaseURL+"/api/v1/resourcesyncs", wrapper.ListResourceSync)
+		r.Get(options.BaseURL+"/api/v1/resourcesyncs", wrapper.ListResourceSyncs)
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/api/v1/resourcesyncs", wrapper.CreateResourceSync)
@@ -5948,53 +5948,53 @@ func (response DeleteResourceSyncs503JSONResponse) VisitDeleteResourceSyncsRespo
 	return json.NewEncoder(w).Encode(response)
 }
 
-type ListResourceSyncRequestObject struct {
-	Params ListResourceSyncParams
+type ListResourceSyncsRequestObject struct {
+	Params ListResourceSyncsParams
 }
 
-type ListResourceSyncResponseObject interface {
-	VisitListResourceSyncResponse(w http.ResponseWriter) error
+type ListResourceSyncsResponseObject interface {
+	VisitListResourceSyncsResponse(w http.ResponseWriter) error
 }
 
-type ListResourceSync200JSONResponse ResourceSyncList
+type ListResourceSyncs200JSONResponse ResourceSyncList
 
-func (response ListResourceSync200JSONResponse) VisitListResourceSyncResponse(w http.ResponseWriter) error {
+func (response ListResourceSyncs200JSONResponse) VisitListResourceSyncsResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(200)
 
 	return json.NewEncoder(w).Encode(response)
 }
 
-type ListResourceSync400JSONResponse Error
+type ListResourceSyncs400JSONResponse Error
 
-func (response ListResourceSync400JSONResponse) VisitListResourceSyncResponse(w http.ResponseWriter) error {
+func (response ListResourceSyncs400JSONResponse) VisitListResourceSyncsResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(400)
 
 	return json.NewEncoder(w).Encode(response)
 }
 
-type ListResourceSync401JSONResponse Error
+type ListResourceSyncs401JSONResponse Error
 
-func (response ListResourceSync401JSONResponse) VisitListResourceSyncResponse(w http.ResponseWriter) error {
+func (response ListResourceSyncs401JSONResponse) VisitListResourceSyncsResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(401)
 
 	return json.NewEncoder(w).Encode(response)
 }
 
-type ListResourceSync403JSONResponse Error
+type ListResourceSyncs403JSONResponse Error
 
-func (response ListResourceSync403JSONResponse) VisitListResourceSyncResponse(w http.ResponseWriter) error {
+func (response ListResourceSyncs403JSONResponse) VisitListResourceSyncsResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(403)
 
 	return json.NewEncoder(w).Encode(response)
 }
 
-type ListResourceSync503JSONResponse Error
+type ListResourceSyncs503JSONResponse Error
 
-func (response ListResourceSync503JSONResponse) VisitListResourceSyncResponse(w http.ResponseWriter) error {
+func (response ListResourceSyncs503JSONResponse) VisitListResourceSyncsResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(503)
 
@@ -6531,7 +6531,7 @@ type StrictServerInterface interface {
 	DeleteResourceSyncs(ctx context.Context, request DeleteResourceSyncsRequestObject) (DeleteResourceSyncsResponseObject, error)
 
 	// (GET /api/v1/resourcesyncs)
-	ListResourceSync(ctx context.Context, request ListResourceSyncRequestObject) (ListResourceSyncResponseObject, error)
+	ListResourceSyncs(ctx context.Context, request ListResourceSyncsRequestObject) (ListResourceSyncsResponseObject, error)
 
 	// (POST /api/v1/resourcesyncs)
 	CreateResourceSync(ctx context.Context, request CreateResourceSyncRequestObject) (CreateResourceSyncResponseObject, error)
@@ -8212,25 +8212,25 @@ func (sh *strictHandler) DeleteResourceSyncs(w http.ResponseWriter, r *http.Requ
 	}
 }
 
-// ListResourceSync operation middleware
-func (sh *strictHandler) ListResourceSync(w http.ResponseWriter, r *http.Request, params ListResourceSyncParams) {
-	var request ListResourceSyncRequestObject
+// ListResourceSyncs operation middleware
+func (sh *strictHandler) ListResourceSyncs(w http.ResponseWriter, r *http.Request, params ListResourceSyncsParams) {
+	var request ListResourceSyncsRequestObject
 
 	request.Params = params
 
 	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
-		return sh.ssi.ListResourceSync(ctx, request.(ListResourceSyncRequestObject))
+		return sh.ssi.ListResourceSyncs(ctx, request.(ListResourceSyncsRequestObject))
 	}
 	for _, middleware := range sh.middlewares {
-		handler = middleware(handler, "ListResourceSync")
+		handler = middleware(handler, "ListResourceSyncs")
 	}
 
 	response, err := handler(r.Context(), w, r, request)
 
 	if err != nil {
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
-	} else if validResponse, ok := response.(ListResourceSyncResponseObject); ok {
-		if err := validResponse.VisitListResourceSyncResponse(w); err != nil {
+	} else if validResponse, ok := response.(ListResourceSyncsResponseObject); ok {
+		if err := validResponse.VisitListResourceSyncsResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

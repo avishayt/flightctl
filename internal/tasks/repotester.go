@@ -123,14 +123,15 @@ func (r *HttpRepoTester) TestAccess(repository *api.Repository) error {
 }
 
 func (r *RepoTester) SetAccessCondition(ctx context.Context, repository *api.Repository, err error) error {
-	if repository.Status == nil {
-		repository.Status = &api.RepositoryStatus{Conditions: []api.Condition{}}
+	condition := api.Condition{Type: api.RepositoryAccessible}
+	if err == nil {
+		condition.Status = api.ConditionStatusTrue
+		condition.Reason = "Accessible"
+		condition.Message = "Accessible"
+	} else {
+		condition.Status = api.ConditionStatusFalse
+		condition.Reason = "Inaccessible"
+		condition.Message = err.Error()
 	}
-	changed := api.SetStatusConditionByError(&repository.Status.Conditions, api.RepositoryAccessible, "Accessible", "Inaccessible", err)
-	if changed {
-		if _, err := r.serviceHandler.ReplaceRepositoryStatus(ctx, repository); err != nil {
-			return err
-		}
-	}
-	return nil
+	return r.serviceHandler.UpdateRepositoryConditions(ctx, *repository.Metadata.Name, []api.Condition{condition})
 }

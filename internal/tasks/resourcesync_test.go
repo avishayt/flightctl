@@ -7,7 +7,6 @@ import (
 
 	api "github.com/flightctl/flightctl/api/v1alpha1"
 	"github.com/flightctl/flightctl/internal/service"
-	"github.com/flightctl/flightctl/internal/store"
 	"github.com/flightctl/flightctl/internal/tasks_client"
 	"github.com/flightctl/flightctl/internal/util"
 	flightlog "github.com/flightctl/flightctl/pkg/log"
@@ -20,10 +19,10 @@ import (
 	"go.uber.org/mock/gomock"
 )
 
-func resourceSyncParams(t *testing.T) (tasks_client.CallbackManager, *service.ServiceHandler, store.Store, logrus.FieldLogger) {
+func resourceSyncParams(t *testing.T) (tasks_client.CallbackManager, *service.ServiceHandler, logrus.FieldLogger) {
 	ctrl := gomock.NewController(t)
 	l := flightlog.InitLogs()
-	return tasks_client.NewCallbackManager(queues.NewMockPublisher(ctrl), l), nil, nil, l
+	return tasks_client.NewCallbackManager(queues.NewMockPublisher(ctrl), l), nil, l
 }
 
 func TestIsValidFile_invalid(t *testing.T) {

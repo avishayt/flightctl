@@ -149,6 +149,7 @@ type ResourceInterface interface {
 	HasNilSpec() bool
 	HasSameSpecAs(any) bool
 	GetStatusAsJson() ([]byte, error)
+	SetConditions([]api.Condition) bool
 }
 
 var _ ResourceInterface = (*Device)(nil)

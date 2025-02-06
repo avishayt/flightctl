@@ -22,6 +22,7 @@ type Repository interface {
 	DeleteAll(ctx context.Context, orgId uuid.UUID, callback RepositoryStoreAllDeletedCallback) error
 	UpdateStatus(ctx context.Context, orgId uuid.UUID, resource *api.Repository) (*api.Repository, error)
 
+	UpdateConditions(ctx context.Context, orgId uuid.UUID, name string, conditions []api.Condition) error
 	GetFleetRefs(ctx context.Context, orgId uuid.UUID, name string) (*api.FleetList, error)
 	GetDeviceRefs(ctx context.Context, orgId uuid.UUID, name string) (*api.DeviceList, error)
 }
@@ -113,6 +114,10 @@ func (s *RepositoryStore) DeleteAll(ctx context.Context, orgId uuid.UUID, callba
 
 func (s *RepositoryStore) UpdateStatus(ctx context.Context, orgId uuid.UUID, resource *api.Repository) (*api.Repository, error) {
 	return s.genericStore.UpdateStatus(ctx, orgId, resource)
+}
+
+func (s *RepositoryStore) UpdateConditions(ctx context.Context, orgId uuid.UUID, name string, conditions []api.Condition) error {
+	return s.genericStore.UpdateConditions(ctx, orgId, name, conditions)
 }
 
 func (s *RepositoryStore) GetFleetRefs(ctx context.Context, orgId uuid.UUID, name string) (*api.FleetList, error) {

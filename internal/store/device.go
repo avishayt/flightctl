@@ -417,51 +417,8 @@ func (s *DeviceStore) UpdateStatus(ctx context.Context, orgId uuid.UUID, resourc
 	return s.genericStore.UpdateStatus(ctx, orgId, resource)
 }
 
-func (s *DeviceStore) updateAnnotations(orgId uuid.UUID, name string, annotations map[string]string, deleteKeys []string) (bool, error) {
-	existingRecord := model.Device{Resource: model.Resource{OrgID: orgId, Name: name}}
-	result := s.db.First(&existingRecord)
-	if result.Error != nil {
-		return false, ErrorFromGormError(result.Error)
-	}
-	existingAnnotations := util.EnsureMap(existingRecord.Annotations)
-
-	existingConsoleAnnotation := util.DefaultIfNotInMap(existingAnnotations, api.DeviceAnnotationConsole, "")
-	existingAnnotations = util.MergeLabels(existingAnnotations, annotations)
-
-	for _, deleteKey := range deleteKeys {
-		delete(existingAnnotations, deleteKey)
-	}
-	newConsoleAnnotation := util.DefaultIfNotInMap(existingAnnotations, api.DeviceAnnotationConsole, "")
-
-	// Changing the console annotation requires bumping the renderedVersion annotation
-	if existingConsoleAnnotation != newConsoleAnnotation {
-		nextRenderedVersion, err := getNextRenderedVersion(existingAnnotations)
-		if err != nil {
-			return false, err
-		}
-
-		existingAnnotations[api.DeviceAnnotationRenderedVersion] = nextRenderedVersion
-	}
-
-	result = s.db.Model(existingRecord).Where("resource_version = ?", lo.FromPtr(existingRecord.ResourceVersion)).Updates(map[string]interface{}{
-		"annotations":      model.MakeJSONMap(existingAnnotations),
-		"resource_version": gorm.Expr("resource_version + 1"),
-	})
-
-	err := ErrorFromGormError(result.Error)
-	if err != nil {
-		return strings.Contains(err.Error(), "deadlock"), err
-	}
-	if result.RowsAffected == 0 {
-		return true, flterrors.ErrNoRowsUpdated
-	}
-	return false, nil
-}
-
 func (s *DeviceStore) UpdateAnnotations(ctx context.Context, orgId uuid.UUID, name string, annotations map[string]string, deleteKeys []string) error {
-	return retryUpdate(func() (bool, error) {
-		return s.updateAnnotations(orgId, name, annotations, deleteKeys)
-	})
+	return s.genericStore.UpdateAnnotations(ctx, orgId, name, annotations, deleteKeys)
 }
 
 func (s *DeviceStore) updateRendered(orgId uuid.UUID, name, renderedConfig, renderedApplications string) (retry bool, err error) {

@@ -197,3 +197,17 @@ func (d *Device) HasSameSpecAs(otherResource any) bool {
 func (d *Device) GetStatusAsJson() ([]byte, error) {
 	return d.Status.MarshalJSON()
 }
+
+func (d *Device) SetConditions(conditions []api.Condition) bool {
+	if d.Status == nil {
+		d.Status = MakeJSONField(api.DeviceStatus{})
+	}
+	anyChanged := false
+	for _, condition := range conditions {
+		changed := api.SetStatusCondition(&d.Status.Data.Conditions, condition)
+		if changed {
+			anyChanged = true
+		}
+	}
+	return anyChanged
+}

@@ -298,3 +298,32 @@ func (h *ServiceHandler) ReplaceRepositoryStatus(ctx context.Context, repository
 	}
 	return result, nil
 }
+
+// Not exposed via REST API; accepts and returns API objects rather than server objects
+// Does not perform permission check because it is stricly internal.
+func (h *ServiceHandler) UpdateRepositoryConditions(ctx context.Context, name string, conditions []api.Condition) error {
+	orgId := store.NullOrgId
+	return h.store.Repository().UpdateConditions(ctx, orgId, name, conditions)
+}
+
+// Not exposed via REST API; accepts and returns API objects rather than server objects
+// Does not perform permission check because it is stricly internal.
+func (h *ServiceHandler) GetFleetRefs(ctx context.Context, name string) (*api.FleetList, error) {
+	orgId := store.NullOrgId
+	fleets, err := h.store.Repository().GetFleetRefs(ctx, orgId, name)
+	if err != nil {
+		return nil, err
+	}
+	return fleets, nil
+}
+
+// Not exposed via REST API; accepts and returns API objects rather than server objects
+// Does not perform permission check because it is stricly internal.
+func (h *ServiceHandler) GetDeviceRefs(ctx context.Context, name string) (*api.DeviceList, error) {
+	orgId := store.NullOrgId
+	devices, err := h.store.Repository().GetDeviceRefs(ctx, orgId, name)
+	if err != nil {
+		return nil, err
+	}
+	return devices, nil
+}

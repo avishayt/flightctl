@@ -5,10 +5,12 @@ import (
 	b64 "encoding/base64"
 	"encoding/json"
 	"errors"
+	"strings"
 
 	api "github.com/flightctl/flightctl/api/v1alpha1"
 	"github.com/flightctl/flightctl/internal/flterrors"
 	"github.com/flightctl/flightctl/internal/store/model"
+	"github.com/flightctl/flightctl/internal/util"
 	"github.com/google/uuid"
 	"github.com/samber/lo"
 	"github.com/sirupsen/logrus"
@@ -338,6 +340,79 @@ func (s *GenericStore[P, M, A, AL]) UpdateStatus(ctx context.Context, orgId uuid
 		return nil, err
 	}
 	return apiResource, nil
+}
+
+func (s *GenericStore[P, M, A, AL]) updateAnnotations(ctx context.Context, orgId uuid.UUID, name string, annotations map[string]string, deleteKeys []string) (bool, error) {
+	var existingRecord M
+	result := s.db.WithContext(ctx).Where("org_id = ? AND name = ? AND spec IS NOT NULL", orgId, name).First(&existingRecord)
+	if result.Error != nil {
+		return false, ErrorFromGormError(result.Error)
+	}
+
+	existingAnnotations := util.EnsureMap(P(&existingRecord).GetAnnotations())
+	existingAnnotations = util.MergeLabels(existingAnnotations, annotations)
+
+	for _, deleteKey := range deleteKeys {
+		delete(existingAnnotations, deleteKey)
+	}
+
+	resourceVersion := lo.FromPtr(P(&existingRecord).GetResourceVersion())
+	result = s.db.Model(existingRecord).Where("resource_version = ?", resourceVersion).Updates(map[string]interface{}{
+		"annotations":      model.MakeJSONMap(existingAnnotations),
+		"resource_version": gorm.Expr("resource_version + 1"),
+	})
+	err := ErrorFromGormError(result.Error)
+	if err != nil {
+		return strings.Contains(err.Error(), "deadlock"), err
+	}
+	if result.RowsAffected == 0 {
+		return true, flterrors.ErrNoRowsUpdated
+	}
+	return false, nil
+}
+
+func (s *GenericStore[P, M, A, AL]) UpdateAnnotations(ctx context.Context, orgId uuid.UUID, name string, annotations map[string]string, deleteKeys []string) error {
+	return retryUpdate(func() (bool, error) {
+		return s.updateAnnotations(ctx, orgId, name, annotations, deleteKeys)
+	})
+}
+
+func (s *GenericStore[P, M, A, AL]) updateConditions(ctx context.Context, orgId uuid.UUID, name string, conditions []api.Condition) (bool, error) {
+	var existingRecord M
+	result := s.db.WithContext(ctx).Where("org_id = ? AND name = ? AND spec IS NOT NULL", orgId, name).First(&existingRecord)
+	if result.Error != nil {
+		return false, ErrorFromGormError(result.Error)
+	}
+
+	changed := P(&existingRecord).SetConditions(conditions)
+	if !changed {
+		return false, nil
+	}
+
+	jsonStatus, err := P(&existingRecord).GetStatusAsJson()
+	if err != nil {
+		return false, err
+	}
+
+	resourceVersion := lo.FromPtr(P(&existingRecord).GetResourceVersion())
+	result = s.db.Model(existingRecord).Where("resource_version = ?", resourceVersion).Updates(map[string]interface{}{
+		"status":           jsonStatus,
+		"resource_version": gorm.Expr("resource_version + 1"),
+	})
+	err = ErrorFromGormError(result.Error)
+	if err != nil {
+		return strings.Contains(err.Error(), "deadlock"), err
+	}
+	if result.RowsAffected == 0 {
+		return true, flterrors.ErrNoRowsUpdated
+	}
+	return false, nil
+}
+
+func (s *GenericStore[P, M, A, AL]) UpdateConditions(ctx context.Context, orgId uuid.UUID, name string, conditions []api.Condition) error {
+	return retryUpdate(func() (bool, error) {
+		return s.updateConditions(ctx, orgId, name, conditions)
+	})
 }
 
 func (s *GenericStore[P, M, A, AL]) List(ctx context.Context, orgId uuid.UUID, listParams ListParams) (*AL, error) {

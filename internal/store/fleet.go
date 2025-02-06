@@ -5,7 +5,6 @@ import (
 	b64 "encoding/base64"
 	"encoding/json"
 	"fmt"
-	"strings"
 
 	api "github.com/flightctl/flightctl/api/v1alpha1"
 	"github.com/flightctl/flightctl/internal/flterrors"
@@ -390,78 +389,12 @@ func (s *FleetStore) UnsetOwnerByKind(ctx context.Context, tx *gorm.DB, orgId uu
 	return ErrorFromGormError(result.Error)
 }
 
-func (s *FleetStore) updateConditions(orgId uuid.UUID, name string, conditions []api.Condition) (bool, error) {
-	existingRecord := model.Fleet{Resource: model.Resource{OrgID: orgId, Name: name}}
-	result := s.db.First(&existingRecord)
-	if result.Error != nil {
-		return false, ErrorFromGormError(result.Error)
-	}
-
-	if existingRecord.Status == nil {
-		existingRecord.Status = model.MakeJSONField(api.FleetStatus{})
-	}
-	if existingRecord.Status.Data.Conditions == nil {
-		existingRecord.Status.Data.Conditions = []api.Condition{}
-	}
-	changed := false
-	for _, condition := range conditions {
-		changed = api.SetStatusCondition(&existingRecord.Status.Data.Conditions, condition)
-	}
-	if !changed {
-		return false, nil
-	}
-
-	result = s.db.Model(existingRecord).Where("resource_version = ?", lo.FromPtr(existingRecord.ResourceVersion)).Updates(map[string]interface{}{
-		"status":           existingRecord.Status,
-		"resource_version": gorm.Expr("resource_version + 1"),
-	})
-	err := ErrorFromGormError(result.Error)
-	if err != nil {
-		return strings.Contains(err.Error(), "deadlock"), err
-	}
-	if result.RowsAffected == 0 {
-		return true, flterrors.ErrNoRowsUpdated
-	}
-	return false, nil
-}
-
 func (s *FleetStore) UpdateConditions(ctx context.Context, orgId uuid.UUID, name string, conditions []api.Condition) error {
-	return retryUpdate(func() (bool, error) {
-		return s.updateConditions(orgId, name, conditions)
-	})
-}
-
-func (s *FleetStore) updateAnnotations(orgId uuid.UUID, name string, annotations map[string]string, deleteKeys []string) (bool, error) {
-	existingRecord := model.Fleet{Resource: model.Resource{OrgID: orgId, Name: name}}
-	result := s.db.First(&existingRecord)
-	if result.Error != nil {
-		return false, ErrorFromGormError(result.Error)
-	}
-	existingAnnotations := util.EnsureMap(existingRecord.Annotations)
-	existingAnnotations = util.MergeLabels(existingAnnotations, annotations)
-
-	for _, deleteKey := range deleteKeys {
-		delete(existingAnnotations, deleteKey)
-	}
-
-	result = s.db.Model(existingRecord).Where("resource_version = ?", lo.FromPtr(existingRecord.ResourceVersion)).Updates(map[string]interface{}{
-		"annotations":      model.MakeJSONMap(existingAnnotations),
-		"resource_version": gorm.Expr("resource_version + 1"),
-	})
-	err := ErrorFromGormError(result.Error)
-	if err != nil {
-		return strings.Contains(err.Error(), "deadlock"), err
-	}
-	if result.RowsAffected == 0 {
-		return true, flterrors.ErrNoRowsUpdated
-	}
-	return false, nil
+	return s.genericStore.UpdateConditions(ctx, orgId, name, conditions)
 }
 
 func (s *FleetStore) UpdateAnnotations(ctx context.Context, orgId uuid.UUID, name string, annotations map[string]string, deleteKeys []string) error {
-	return retryUpdate(func() (bool, error) {
-		return s.updateAnnotations(orgId, name, annotations, deleteKeys)
-	})
+	return s.genericStore.UpdateAnnotations(ctx, orgId, name, annotations, deleteKeys)
 }
 
 func (s *FleetStore) OverwriteRepositoryRefs(ctx context.Context, orgId uuid.UUID, name string, repositoryNames ...string) error {

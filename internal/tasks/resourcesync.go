@@ -13,15 +13,12 @@ import (
 	"github.com/flightctl/flightctl/internal/flterrors"
 	"github.com/flightctl/flightctl/internal/service"
 	"github.com/flightctl/flightctl/internal/service/common"
-	"github.com/flightctl/flightctl/internal/store"
-	"github.com/flightctl/flightctl/internal/store/selector"
 	"github.com/flightctl/flightctl/internal/tasks_client"
 	"github.com/flightctl/flightctl/internal/util"
 	"github.com/flightctl/flightctl/pkg/log"
 	"github.com/flightctl/flightctl/pkg/reqid"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-git/go-billy/v5"
-	"github.com/google/uuid"
 	"github.com/samber/lo"
 	"github.com/sirupsen/logrus"
 	yamlutil "k8s.io/apimachinery/pkg/util/yaml"
@@ -29,7 +26,6 @@ import (
 
 type ResourceSync struct {
 	log             logrus.FieldLogger
-	store           store.Store
 	serviceHandler  *service.ServiceHandler
 	callbackManager tasks_client.CallbackManager
 }
@@ -39,10 +35,9 @@ type genericResourceMap map[string]interface{}
 var validFileExtensions = []string{"json", "yaml", "yml"}
 var supportedResources = []string{api.FleetKind}
 
-func NewResourceSync(callbackManager tasks_client.CallbackManager, serviceHandler *service.ServiceHandler, store store.Store, log logrus.FieldLogger) *ResourceSync {
+func NewResourceSync(callbackManager tasks_client.CallbackManager, serviceHandler *service.ServiceHandler, log logrus.FieldLogger) *ResourceSync {
 	return &ResourceSync{
 		log:             log,
-		store:           store,
 		serviceHandler:  serviceHandler,
 		callbackManager: callbackManager,
 	}
@@ -101,17 +96,12 @@ func (r *ResourceSync) run(ctx context.Context, log logrus.FieldLogger, rs *api.
 
 	fleetsPreOwned := make([]api.Fleet, 0)
 
-	fs, err := selector.NewFieldSelectorFromMap(map[string]string{"metadata.owner": *owner})
-	if err != nil {
-		return err
-	}
-
-	listParams := store.ListParams{
-		Limit:         100,
-		FieldSelector: fs,
+	listParams := api.ListFleetsParams{
+		Limit:         lo.ToPtr(int32(ItemsPerPage)),
+		FieldSelector: lo.ToPtr(fmt.Sprintf("metadata.owner=%s", *owner)),
 	}
 	for {
-		listRes, err := r.store.Fleet().List(ctx, store.NullOrgId, listParams)
+		listRes, err := listFleets(ctx, r.serviceHandler, listParams)
 		if err != nil {
 			err := fmt.Errorf("resourcesync/%s: failed to list owned fleets. error: %w", *rs.Metadata.Name, err)
 			log.Errorf("%e", err)
@@ -121,26 +111,25 @@ func (r *ResourceSync) run(ctx context.Context, log logrus.FieldLogger, rs *api.
 		if listRes.Metadata.Continue == nil {
 			break
 		}
-		cont, err := store.ParseContinueString(listRes.Metadata.Continue)
-		if err != nil {
-			return fmt.Errorf("resourcesync/%s: failed to parse continuation for paging: %w", *rs.Metadata.Name, err)
+		if listRes.Metadata.Continue == nil {
+			break
 		}
-		listParams.Continue = cont
+		listParams.Continue = listRes.Metadata.Continue
 	}
 
 	fleetsToRemove := fleetsDelta(fleetsPreOwned, fleets)
 
 	r.log.Infof("resourcesync/%s: applying #%d fleets ", *rs.Metadata.Name, len(fleets))
-	err = r.createOrUpdateMultiple(ctx, store.NullOrgId, fleets...)
+	err = r.createOrUpdateMultiple(ctx, fleets...)
 	if err == flterrors.ErrUpdatingResourceWithOwnerNotAllowed {
 		err = fmt.Errorf("one or more fleets are managed by a different resource. %w", err)
 	}
 	if len(fleetsToRemove) > 0 {
 		r.log.Infof("resourcesync/%s: found #%d fleets to remove. removing\n", *rs.Metadata.Name, len(fleetsToRemove))
 		for _, fleetToRemove := range fleetsToRemove {
-			err := r.store.Fleet().Delete(ctx, store.NullOrgId, fleetToRemove, r.callbackManager.FleetUpdatedCallback)
+			_, err := deleteFleet(ctx, r.serviceHandler, fleetToRemove)
 			if err != nil {
-				log.Errorf("resourcesync/%s: failed to remove old fleet %s/%s. error: %s", *rs.Metadata.Name, store.NullOrgId, fleetToRemove, err.Error())
+				log.Errorf("resourcesync/%s: failed to remove old fleet %s. error: %s", *rs.Metadata.Name, fleetToRemove, err.Error())
 				return err
 			}
 		}
@@ -155,10 +144,10 @@ func (r *ResourceSync) run(ctx context.Context, log logrus.FieldLogger, rs *api.
 	return nil
 }
 
-func (r *ResourceSync) createOrUpdateMultiple(ctx context.Context, orgId uuid.UUID, resources ...*api.Fleet) error {
+func (r *ResourceSync) createOrUpdateMultiple(ctx context.Context, resources ...*api.Fleet) error {
 	var errs []error
 	for _, resource := range resources {
-		_, _, err := r.store.Fleet().CreateOrUpdate(ctx, orgId, resource, nil, false, r.callbackManager.FleetUpdatedCallback)
+		_, err := replaceFleet(ctx, r.serviceHandler, resource)
 		if err == flterrors.ErrUpdatingResourceWithOwnerNotAllowed {
 			err = fmt.Errorf("one or more fleets are managed by a different resource. %w", err)
 		}

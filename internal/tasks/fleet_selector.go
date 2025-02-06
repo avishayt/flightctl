@@ -8,6 +8,7 @@ import (
 
 	api "github.com/flightctl/flightctl/api/v1alpha1"
 	"github.com/flightctl/flightctl/internal/flterrors"
+	"github.com/flightctl/flightctl/internal/service"
 	"github.com/flightctl/flightctl/internal/store"
 	"github.com/flightctl/flightctl/internal/store/selector"
 	"github.com/flightctl/flightctl/internal/tasks_client"
@@ -36,12 +37,11 @@ import (
 //
 // In addition, we have the cases where the user deleted all fleets or devices in an org
 
-func fleetSelectorMatching(ctx context.Context, resourceRef *tasks_client.ResourceReference, store store.Store, callbackManager tasks_client.CallbackManager, log logrus.FieldLogger) error {
+func fleetSelectorMatching(ctx context.Context, resourceRef *tasks_client.ResourceReference, serviceHandler *service.ServiceHandler, callbackManager tasks_client.CallbackManager, log logrus.FieldLogger) error {
 	logic := FleetSelectorMatchingLogic{
 		callbackManager: callbackManager,
 		log:             log,
-		fleetStore:      store.Fleet(),
-		devStore:        store.Device(),
+		serviceHandler:  serviceHandler,
 		resourceRef:     *resourceRef,
 	}
 
@@ -73,18 +73,16 @@ func fleetSelectorMatching(ctx context.Context, resourceRef *tasks_client.Resour
 type FleetSelectorMatchingLogic struct {
 	callbackManager tasks_client.CallbackManager
 	log             logrus.FieldLogger
-	fleetStore      store.Fleet
-	devStore        store.Device
+	serviceHandler  *service.ServiceHandler
 	resourceRef     tasks_client.ResourceReference
 	itemsPerPage    int
 }
 
-func NewFleetSelectorMatchingLogic(callbackManager tasks_client.CallbackManager, log logrus.FieldLogger, storeInst store.Store, resourceRef tasks_client.ResourceReference) FleetSelectorMatchingLogic {
+func NewFleetSelectorMatchingLogic(callbackManager tasks_client.CallbackManager, log logrus.FieldLogger, serviceHandler *service.ServiceHandler, resourceRef tasks_client.ResourceReference) FleetSelectorMatchingLogic {
 	return FleetSelectorMatchingLogic{
 		callbackManager: callbackManager,
 		log:             log,
-		fleetStore:      storeInst.Fleet(),
-		devStore:        storeInst.Device(),
+		serviceHandler:  serviceHandler,
 		resourceRef:     resourceRef,
 		itemsPerPage:    ItemsPerPage,
 	}
@@ -98,7 +96,7 @@ func (f *FleetSelectorMatchingLogic) SetItemsPerPage(items int) {
 func (f FleetSelectorMatchingLogic) FleetSelectorUpdatedNoOverlapping(ctx context.Context) error {
 	f.log.Infof("Checking fleet owner due to fleet selector update %s/%s", f.resourceRef.OrgID, f.resourceRef.Name)
 
-	fleet, err := f.fleetStore.Get(ctx, f.resourceRef.OrgID, f.resourceRef.Name)
+	fleet, err := getFleet(ctx, f.serviceHandler, f.resourceRef.Name)
 	if err != nil {
 		if errors.Is(err, flterrors.ErrResourceNotFound) {
 			return f.removeOwnerFromDevicesOwnedByFleet(ctx)
@@ -127,6 +125,9 @@ func (f FleetSelectorMatchingLogic) FleetSelectorUpdatedNoOverlapping(ctx contex
 	listParams := store.ListParams{
 		LabelSelector: ls,
 		Limit:         ItemsPerPage,
+	}
+	l := api.ListDevicesParams{
+		Limit: ItemsPerPage,
 	}
 	errors := 0
 

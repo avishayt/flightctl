@@ -9,6 +9,7 @@ import (
 	api "github.com/flightctl/flightctl/api/v1alpha1"
 	"github.com/flightctl/flightctl/internal/api/server"
 	"github.com/flightctl/flightctl/internal/auth"
+	commonauth "github.com/flightctl/flightctl/internal/auth/common"
 	"github.com/flightctl/flightctl/internal/flterrors"
 	"github.com/flightctl/flightctl/internal/service/common"
 	"github.com/flightctl/flightctl/internal/store"
@@ -74,7 +75,13 @@ func (h *ServiceHandler) ListDevices(ctx context.Context, request server.ListDev
 
 	var fieldSelector *selector.FieldSelector
 	if request.Params.FieldSelector != nil {
-		if fieldSelector, err = selector.NewFieldSelector(*request.Params.FieldSelector); err != nil {
+		// Allow internal service calls to use private selectors
+		opts := []selector.FieldSelectorOption{}
+		internal, ok := ctx.Value(commonauth.InternalRequestCtxKey).(bool)
+		if ok && internal {
+			opts = append(opts, selector.WithPrivateSelectors())
+		}
+		if fieldSelector, err = selector.NewFieldSelector(*request.Params.FieldSelector, opts...); err != nil {
 			return server.ListDevices400JSONResponse{Message: fmt.Sprintf("failed to parse field selector: %v", err)}, nil
 		}
 	}
@@ -360,6 +367,10 @@ func (h *ServiceHandler) PatchDevice(ctx context.Context, request server.PatchDe
 	if newObj.Metadata.Name == nil || *currentObj.Metadata.Name != *newObj.Metadata.Name {
 		return server.PatchDevice400JSONResponse{Message: "metadata.name is immutable"}, nil
 	}
+	if (currentObj.Metadata.Owner == nil) != (newObj.Metadata.Owner == nil) ||
+		(currentObj.Metadata.Owner != nil && *currentObj.Metadata.Owner != *newObj.Metadata.Owner) {
+		return server.PatchDevice400JSONResponse{Message: "metadata.owner is immutable"}, nil
+	}
 	if currentObj.ApiVersion != newObj.ApiVersion {
 		return server.PatchDevice400JSONResponse{Message: "apiVersion is immutable"}, nil
 	}
@@ -458,4 +469,11 @@ func (h *ServiceHandler) DecommissionDevice(ctx context.Context, request server.
 	default:
 		return nil, err
 	}
+}
+
+// Not exposed via REST API; accepts and returns API objects rather than server objects
+// Does not perform permission check because it is stricly internal.
+func (h *ServiceHandler) UpdateDeviceAnnotations(ctx context.Context, name string, annotations map[string]string, deleteKeys []string) error {
+	orgId := store.NullOrgId
+	return h.store.Device().UpdateAnnotations(ctx, orgId, name, annotations, deleteKeys)
 }

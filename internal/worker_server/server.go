@@ -56,7 +56,7 @@ func (s *Server) Run(ctx context.Context) error {
 	}
 	callbackManager := tasks_client.NewCallbackManager(publisher, s.log)
 	serviceHandler := service.NewServiceHandler(s.store, callbackManager, kvStore, nil, s.log, "", "")
-	if err = tasks.LaunchConsumers(ctx, s.provider, s.store, serviceHandler, callbackManager, s.k8sClient, kvStore, 1, 1); err != nil {
+	if err = tasks.LaunchConsumers(ctx, s.provider, serviceHandler, callbackManager, s.k8sClient, kvStore, 1, 1); err != nil {
 		s.log.WithError(err).Error("failed to launch consumers")
 		return err
 	}

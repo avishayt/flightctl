@@ -133,3 +133,17 @@ func (rs *ResourceSync) GetStatusAsJson() ([]byte, error) {
 	}
 	return rs.Status.MarshalJSON()
 }
+
+func (rs *ResourceSync) SetConditions(conditions []api.Condition) bool {
+	if rs.Status == nil {
+		rs.Status = MakeJSONField(api.ResourceSyncStatus{})
+	}
+	anyChanged := false
+	for _, condition := range conditions {
+		changed := api.SetStatusCondition(&rs.Status.Data.Conditions, condition)
+		if changed {
+			anyChanged = true
+		}
+	}
+	return anyChanged
+}

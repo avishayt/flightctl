@@ -149,3 +149,17 @@ func (f *Fleet) HasSameSpecAs(otherResource any) bool {
 func (f *Fleet) GetStatusAsJson() ([]byte, error) {
 	return f.Status.MarshalJSON()
 }
+
+func (f *Fleet) SetConditions(conditions []api.Condition) bool {
+	if f.Status == nil {
+		f.Status = MakeJSONField(api.FleetStatus{})
+	}
+	anyChanged := false
+	for _, condition := range conditions {
+		changed := api.SetStatusCondition(&f.Status.Data.Conditions, condition)
+		if changed {
+			anyChanged = true
+		}
+	}
+	return anyChanged
+}

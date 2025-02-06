@@ -16,8 +16,8 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-func fleetValidate(ctx context.Context, resourceRef *tasks_client.ResourceReference, store store.Store, serviceHandler *service.ServiceHandler, callbackManager tasks_client.CallbackManager, k8sClient k8sclient.K8SClient, log logrus.FieldLogger) error {
-	logic := NewFleetValidateLogic(callbackManager, log, store, serviceHandler, k8sClient, *resourceRef)
+func fleetValidate(ctx context.Context, resourceRef *tasks_client.ResourceReference, serviceHandler *service.ServiceHandler, callbackManager tasks_client.CallbackManager, k8sClient k8sclient.K8SClient, log logrus.FieldLogger) error {
+	logic := NewFleetValidateLogic(callbackManager, log, serviceHandler, k8sClient, *resourceRef)
 	switch {
 	case resourceRef.Op == tasks_client.FleetValidateOpUpdate && resourceRef.Kind == api.FleetKind:
 		err := logic.CreateNewTemplateVersionIfFleetValid(ctx)
@@ -33,19 +33,18 @@ func fleetValidate(ctx context.Context, resourceRef *tasks_client.ResourceRefere
 type FleetValidateLogic struct {
 	callbackManager tasks_client.CallbackManager
 	log             logrus.FieldLogger
-	store           store.Store
 	serviceHandler  *service.ServiceHandler
 	k8sClient       k8sclient.K8SClient
 	resourceRef     tasks_client.ResourceReference
 	templateConfig  *[]api.ConfigProviderSpec
 }
 
-func NewFleetValidateLogic(callbackManager tasks_client.CallbackManager, log logrus.FieldLogger, store store.Store, serviceHandler *service.ServiceHandler, k8sClient k8sclient.K8SClient, resourceRef tasks_client.ResourceReference) FleetValidateLogic {
-	return FleetValidateLogic{callbackManager: callbackManager, log: log, store: store, serviceHandler: serviceHandler, k8sClient: k8sClient, resourceRef: resourceRef}
+func NewFleetValidateLogic(callbackManager tasks_client.CallbackManager, log logrus.FieldLogger, serviceHandler *service.ServiceHandler, k8sClient k8sclient.K8SClient, resourceRef tasks_client.ResourceReference) FleetValidateLogic {
+	return FleetValidateLogic{callbackManager: callbackManager, log: log, serviceHandler: serviceHandler, k8sClient: k8sClient, resourceRef: resourceRef}
 }
 
 func (t *FleetValidateLogic) CreateNewTemplateVersionIfFleetValid(ctx context.Context) error {
-	fleet, err := t.store.Fleet().Get(ctx, t.resourceRef.OrgID, t.resourceRef.Name)
+	fleet, err := getFleet(ctx, t.serviceHandler, t.resourceRef.Name)
 	if err != nil {
 		return fmt.Errorf("failed getting fleet %s/%s: %w", t.resourceRef.OrgID, t.resourceRef.Name, err)
 	}
@@ -55,7 +54,7 @@ func (t *FleetValidateLogic) CreateNewTemplateVersionIfFleetValid(ctx context.Co
 
 	// Set the many-to-many relationship with the repos (we do this even if the validation failed so that we will
 	// validate the fleet again if the repository is updated, and then it might be fixed).
-	err = t.store.Fleet().OverwriteRepositoryRefs(ctx, t.resourceRef.OrgID, *fleet.Metadata.Name, referencedRepos...)
+	err = t.serviceHandler.OverwriteRepositoryRefs(ctx, *fleet.Metadata.Name, referencedRepos...)
 	if err != nil {
 		return fmt.Errorf("setting repository references: %w", err)
 	}
@@ -85,7 +84,7 @@ func (t *FleetValidateLogic) CreateNewTemplateVersionIfFleetValid(ctx context.Co
 	if fleet.Spec.RolloutPolicy == nil || fleet.Spec.RolloutPolicy.DeviceSelection == nil {
 		callback = t.callbackManager.TemplateVersionCreatedCallback
 	}
-	tv, err := t.store.TemplateVersion().Create(ctx, t.resourceRef.OrgID, &templateVersion, callback)
+	tv, err := t.serviceHandler.CreateTemplateVersion(ctx, &templateVersion, callback)
 	if err != nil {
 		return t.setStatus(ctx, fmt.Errorf("creating templateVersion for valid fleet: %w", err))
 	}
@@ -93,7 +92,7 @@ func (t *FleetValidateLogic) CreateNewTemplateVersionIfFleetValid(ctx context.Co
 	annotations := map[string]string{
 		api.FleetAnnotationTemplateVersion: *tv.Metadata.Name,
 	}
-	err = t.store.Fleet().UpdateAnnotations(ctx, t.resourceRef.OrgID, *fleet.Metadata.Name, annotations, nil)
+	err = t.serviceHandler.UpdateFleetAnnotations(ctx, *fleet.Metadata.Name, annotations, nil)
 	if err != nil {
 		return t.setStatus(ctx, fmt.Errorf("setting fleet annotation with newly-created templateVersion: %w", err))
 	}
@@ -113,7 +112,7 @@ func (t *FleetValidateLogic) setStatus(ctx context.Context, validationErr error)
 		condition.Message = validationErr.Error()
 	}
 
-	err := t.store.Fleet().UpdateConditions(ctx, t.resourceRef.OrgID, t.resourceRef.Name, []api.Condition{condition})
+	err := t.serviceHandler.UpdateFleetConditions(ctx, t.resourceRef.Name, []api.Condition{condition})
 	if err != nil {
 		t.log.Errorf("Failed setting condition for fleet %s/%s: %v", t.resourceRef.OrgID, t.resourceRef.Name, err)
 	}

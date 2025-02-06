@@ -220,3 +220,17 @@ func (tv *TemplateVersion) GetStatusAsJson() ([]byte, error) {
 	}
 	return tv.Status.MarshalJSON()
 }
+
+func (tv *TemplateVersion) SetConditions(conditions []api.Condition) bool {
+	if tv.Status == nil {
+		tv.Status = MakeJSONField(api.TemplateVersionStatus{})
+	}
+	anyChanged := false
+	for _, condition := range conditions {
+		changed := api.SetStatusCondition(&tv.Status.Data.Conditions, condition)
+		if changed {
+			anyChanged = true
+		}
+	}
+	return anyChanged
+}

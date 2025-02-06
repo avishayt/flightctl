@@ -171,3 +171,17 @@ func (r *Repository) HasSameSpecAs(otherResource any) bool {
 func (r *Repository) GetStatusAsJson() ([]byte, error) {
 	return r.Status.MarshalJSON()
 }
+
+func (r *Repository) SetConditions(conditions []api.Condition) bool {
+	if r.Status == nil {
+		r.Status = MakeJSONField(api.RepositoryStatus{})
+	}
+	anyChanged := false
+	for _, condition := range conditions {
+		changed := api.SetStatusCondition(&r.Status.Data.Conditions, condition)
+		if changed {
+			anyChanged = true
+		}
+	}
+	return anyChanged
+}

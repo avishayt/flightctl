@@ -367,3 +367,24 @@ func (h *ServiceHandler) PatchFleet(ctx context.Context, request server.PatchFle
 func (h *ServiceHandler) PatchFleetStatus(ctx context.Context, request server.PatchFleetStatusRequestObject) (server.PatchFleetStatusResponseObject, error) {
 	return nil, fmt.Errorf("not yet implemented")
 }
+
+// Not exposed via REST API; accepts and returns API objects rather than server objects
+// Does not perform permission check because it is stricly internal.
+func (h *ServiceHandler) UpdateFleetAnnotations(ctx context.Context, name string, annotations map[string]string, deleteKeys []string) error {
+	orgId := store.NullOrgId
+	return h.store.Fleet().UpdateAnnotations(ctx, orgId, name, annotations, deleteKeys)
+}
+
+// Not exposed via REST API; accepts and returns API objects rather than server objects
+// Does not perform permission check because it is stricly internal.
+func (h *ServiceHandler) UpdateFleetConditions(ctx context.Context, name string, conditions []api.Condition) error {
+	orgId := store.NullOrgId
+	return h.store.Fleet().UpdateConditions(ctx, orgId, name, conditions)
+}
+
+// Not exposed via REST API; accepts and returns API objects rather than server objects
+// Does not perform permission check because it is stricly internal.
+func (h *ServiceHandler) OverwriteRepositoryRefs(ctx context.Context, name string, repositoryNames ...string) error {
+	orgId := store.NullOrgId
+	return h.store.Fleet().OverwriteRepositoryRefs(ctx, orgId, name)
+}

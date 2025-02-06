@@ -129,3 +129,17 @@ func (e *EnrollmentRequest) HasSameSpecAs(otherResource any) bool {
 func (e *EnrollmentRequest) GetStatusAsJson() ([]byte, error) {
 	return e.Status.MarshalJSON()
 }
+
+func (e *EnrollmentRequest) SetConditions(conditions []api.Condition) bool {
+	if e.Status == nil {
+		e.Status = MakeJSONField(api.EnrollmentRequestStatus{})
+	}
+	anyChanged := false
+	for _, condition := range conditions {
+		changed := api.SetStatusCondition(&e.Status.Data.Conditions, condition)
+		if changed {
+			anyChanged = true
+		}
+	}
+	return anyChanged
+}

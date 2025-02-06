@@ -5,13 +5,13 @@ import (
 	"fmt"
 
 	api "github.com/flightctl/flightctl/api/v1alpha1"
-	"github.com/flightctl/flightctl/internal/store"
+	"github.com/flightctl/flightctl/internal/service"
 	"github.com/flightctl/flightctl/internal/tasks_client"
 	"github.com/sirupsen/logrus"
 )
 
-func repositoryUpdate(ctx context.Context, resourceRef *tasks_client.ResourceReference, store store.Store, callbackManager tasks_client.CallbackManager, log logrus.FieldLogger) error {
-	logic := NewRepositoryUpdateLogic(callbackManager, log, store, *resourceRef)
+func repositoryUpdate(ctx context.Context, resourceRef *tasks_client.ResourceReference, serviceHandler *service.ServiceHandler, callbackManager tasks_client.CallbackManager, log logrus.FieldLogger) error {
+	logic := NewRepositoryUpdateLogic(callbackManager, log, serviceHandler, *resourceRef)
 
 	switch {
 	case resourceRef.Op == tasks_client.RepositoryUpdateOpUpdate && resourceRef.Kind == api.RepositoryKind:
@@ -33,16 +33,16 @@ func repositoryUpdate(ctx context.Context, resourceRef *tasks_client.ResourceRef
 type RepositoryUpdateLogic struct {
 	callbackManager tasks_client.CallbackManager
 	log             logrus.FieldLogger
-	store           store.Store
+	serviceHandler  *service.ServiceHandler
 	resourceRef     tasks_client.ResourceReference
 }
 
-func NewRepositoryUpdateLogic(callbackManager tasks_client.CallbackManager, log logrus.FieldLogger, store store.Store, resourceRef tasks_client.ResourceReference) RepositoryUpdateLogic {
-	return RepositoryUpdateLogic{callbackManager: callbackManager, log: log, store: store, resourceRef: resourceRef}
+func NewRepositoryUpdateLogic(callbackManager tasks_client.CallbackManager, log logrus.FieldLogger, serviceHandler *service.ServiceHandler, resourceRef tasks_client.ResourceReference) RepositoryUpdateLogic {
+	return RepositoryUpdateLogic{callbackManager: callbackManager, log: log, serviceHandler: serviceHandler, resourceRef: resourceRef}
 }
 
 func (t *RepositoryUpdateLogic) HandleRepositoryUpdate(ctx context.Context) error {
-	fleets, err := t.store.Repository().GetFleetRefs(ctx, t.resourceRef.OrgID, t.resourceRef.Name)
+	fleets, err := t.serviceHandler.GetFleetRefs(ctx, t.resourceRef.Name)
 	if err != nil {
 		return fmt.Errorf("fetching fleets: %w", err)
 	}
@@ -51,7 +51,7 @@ func (t *RepositoryUpdateLogic) HandleRepositoryUpdate(ctx context.Context) erro
 		t.callbackManager.FleetSourceUpdated(t.resourceRef.OrgID, *fleet.Metadata.Name)
 	}
 
-	devices, err := t.store.Repository().GetDeviceRefs(ctx, t.resourceRef.OrgID, t.resourceRef.Name)
+	devices, err := t.serviceHandler.GetDeviceRefs(ctx, t.resourceRef.Name)
 	if err != nil {
 		return fmt.Errorf("fetching devices: %w", err)
 	}
@@ -64,7 +64,7 @@ func (t *RepositoryUpdateLogic) HandleRepositoryUpdate(ctx context.Context) erro
 }
 
 func (t *RepositoryUpdateLogic) HandleAllRepositoriesDeleted(ctx context.Context, log logrus.FieldLogger) error {
-	fleets, err := t.store.Fleet().List(ctx, t.resourceRef.OrgID, store.ListParams{})
+	fleets, err := listFleets(ctx, t.serviceHandler, api.ListFleetsParams{})
 	if err != nil {
 		return fmt.Errorf("fetching fleets: %w", err)
 	}
@@ -81,7 +81,7 @@ func (t *RepositoryUpdateLogic) HandleAllRepositoriesDeleted(ctx context.Context
 		}
 	}
 
-	devices, err := t.store.Device().List(ctx, t.resourceRef.OrgID, store.ListParams{})
+	devices, err := listDevices(ctx, t.serviceHandler, api.ListDevicesParams{})
 	if err != nil {
 		return fmt.Errorf("fetching devices: %w", err)
 	}

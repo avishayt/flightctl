@@ -70,7 +70,7 @@ func (s *Server) Run() error {
 	defer repoTesterThread.Stop()
 
 	// resource sync
-	resourceSync := tasks.NewResourceSync(callbackManager, serviceHandler, s.store, s.log)
+	resourceSync := tasks.NewResourceSync(callbackManager, serviceHandler, s.log)
 	resourceSyncThread := thread.New(
 		s.log.WithField("pkg", "resourcesync"), "ResourceSync", 2*time.Minute, resourceSync.Poll)
 	resourceSyncThread.Start()

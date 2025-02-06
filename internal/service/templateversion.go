@@ -193,3 +193,17 @@ func (h *ServiceHandler) DeleteTemplateVersion(ctx context.Context, request serv
 		return nil, err
 	}
 }
+
+// Not exposed via REST API; accepts and returns API objects rather than server objects
+// Does not perform permission check because it is stricly internal.
+func (h *ServiceHandler) CreateTemplateVersion(ctx context.Context, tv *api.TemplateVersion, callback store.TemplateVersionStoreCallback) (*api.TemplateVersion, error) {
+	orgId := store.NullOrgId
+	return h.store.TemplateVersion().Create(ctx, orgId, tv, callback)
+}
+
+// Not exposed via REST API; accepts and returns API objects rather than server objects
+// Does not perform permission check because it is stricly internal.
+func (h *ServiceHandler) GetLatestTemplateVersion(ctx context.Context, fleet string) (*api.TemplateVersion, error) {
+	orgId := store.NullOrgId
+	return h.store.TemplateVersion().GetLatest(ctx, orgId, fleet)
+}

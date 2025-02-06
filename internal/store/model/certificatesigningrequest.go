@@ -132,5 +132,22 @@ func (csr *CertificateSigningRequest) HasSameSpecAs(otherResource any) bool {
 }
 
 func (csr *CertificateSigningRequest) GetStatusAsJson() ([]byte, error) {
+	if csr.Status == nil {
+		return nil, nil
+	}
 	return csr.Status.MarshalJSON()
+}
+
+func (csr *CertificateSigningRequest) SetConditions(conditions []api.Condition) bool {
+	if csr.Status == nil {
+		csr.Status = MakeJSONField(api.CertificateSigningRequestStatus{})
+	}
+	anyChanged := false
+	for _, condition := range conditions {
+		changed := api.SetStatusCondition(&csr.Status.Data.Conditions, condition)
+		if changed {
+			anyChanged = true
+		}
+	}
+	return anyChanged
 }

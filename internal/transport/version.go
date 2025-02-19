@@ -1,14 +1,14 @@
-package service
+package transport
 
 import (
-	"context"
+	"net/http"
 
 	"github.com/flightctl/flightctl/internal/api/server"
 	"github.com/flightctl/flightctl/pkg/version"
 )
 
 // (GET /api/version)
-func (h *ServiceHandler) GetVersion(ctx context.Context, request server.GetVersionRequestObject) (server.GetVersionResponseObject, error) {
+func (h *TransportHandler) GetVersion(w http.ResponseWriter, r *http.Request) {
 	versionInfo := version.Get()
 	return server.GetVersion200JSONResponse{
 		Version: versionInfo.GitVersion,

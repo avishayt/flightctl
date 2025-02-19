@@ -1,4 +1,4 @@
-package service
+package transport
 
 import (
 	"github.com/flightctl/flightctl/internal/api/server"
@@ -11,7 +11,7 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-type ServiceHandler struct {
+type TransportHandler struct {
 	store           store.Store
 	ca              *crypto.CA
 	log             logrus.FieldLogger
@@ -28,11 +28,11 @@ type WebsocketHandler struct {
 	consoleSessionManager *console.ConsoleSessionManager
 }
 
-// Make sure we conform to servers Service interface
-var _ server.Service = (*ServiceHandler)(nil)
+// Make sure we conform to servers Transport interface
+var _ server.Transport = (*TransportHandler)(nil)
 
-func NewServiceHandler(store store.Store, callbackManager tasks_client.CallbackManager, kvStore kvstore.KVStore, ca *crypto.CA, log logrus.FieldLogger, agentEndpoint string, uiUrl string) *ServiceHandler {
-	return &ServiceHandler{
+func NewTransportHandler(store store.Store, callbackManager tasks_client.CallbackManager, kvStore kvstore.KVStore, ca *crypto.CA, log logrus.FieldLogger, agentEndpoint string, uiUrl string) *TransportHandler {
+	return &TransportHandler{
 		store:           store,
 		ca:              ca,
 		log:             log,

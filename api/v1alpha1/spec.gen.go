@@ -232,13 +232,13 @@ var swaggerSpec = []string{
 	"6AQ9OkGPTtC9NKykMKP/8/gq+a9STxxr4GlqC2Ytm95RRKs3wT2HtdZnHi0SY2zrJ8XbFrFlE8fHQZhd",
 	"E1/Wm2okApM8LD/IbswfdQVfg65giBxnPCIH4dQpwfHWMeqB2N9GdBrRqc6AdnspDkIpa3/aMk6NRrgt",
 	"4/XIG4/eOg/eW6dOvjodFwcyBGD42zr9ehDGv02F+vulWaMSYSSUI6HctsLCmrjWLBpmaDXtz9YsGmJq",
-	"LVuPttavSKtdXqpea+uw+2TsrWXb0d462ltHe+tobx3G65V0Y7S4jm9T9W3qtbkGHqh2q2vlhbobEc2b",
-	"4t4tr/W5R7FptL1+YgxuE2Y2M78OQvKmULO5cigw0UMzwnYTgdFu9HXYjYaIeM4QOwi7jCn2DnDrwZhj",
-	"R8QaEavJn/aZZAchl7VH3gF2jYbZrWP4yDqPFocvwOJQJ2Q9xtmBTII1z94BJXsgJtpN5f/7pl+jxmEk",
-	"myPZ3LZ2w+ZXbks7oyUtaUb200dXiecvRJVZse+MSgxIBf11qp7dGb6DrsayYx6sXCSTg8neRD8atnX9",
-	"gN+4k5RowQXSBIEwZXcw83KfVj5MmiYpbyDO0BERii50a3JGl4yyZb3+t/QGj8rW0rQWBS3snsfkYw0O",
-	"ajK79o7QXqHcH6xZeLlv3ECd3EqK977+bfHCdhDP8aJ/pDZbeDGWRxs6R9NXRJCI0CvKliHCYEd0V/Lm",
-	"3c3/CwAA///bei++fewBAA==",
+	"LVuPttavSKtdXqpea+uw+2TsrdXbNBpcR4PraHAdDa4DmL2ScIwm1/Fxqj5OvUbXwAvVbnYtG9+Z4dWb",
+	"4t5Nr/W5R7lpNL5+Ygxuk2Y2s78OQvKmVLO5digw0UOzwnYTgdFw9HUYjobIeM4SOwi7jC32DnDrwdhj",
+	"R8QaEavJn/bZZAchlzVI3gF2jZbZrWP4yDqPJocvwORQJ2Q91tmBTIK1z94BJXsgNtpN5f/7pl+jxmEk",
+	"myPZ3LZ2wyZYbss7oyUtaUb280dXiecvRJVpse+MSgzIBf11qp7dGb6DrsayYx6sXCSTg8neRD8atnX9",
+	"gN+4k5RowQXSBIEwZXcw85KfVj5MmiYpbyDO0BERii50a3JGl4yyZb0AuPQGj8rW0rQWBS3snsckZA0O",
+	"alK79o7QXqLcH6xZeblv3ECh3EqO977+bQHDdhDP86J/pDZjeDGWRxs6R9NXRJCI0CvKliHCYEd0V/Lm",
+	"3c3/CwAA//90ndEHfuwBAA==",
 }
 
 // GetSwagger returns the content of the embedded swagger specification file

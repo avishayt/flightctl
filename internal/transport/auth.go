@@ -1,47 +1,60 @@
 package transport
 
 import (
-	"context"
+	"encoding/json"
+	"net/http"
 
 	api "github.com/flightctl/flightctl/api/v1alpha1"
-	"github.com/flightctl/flightctl/internal/api/server"
 	"github.com/flightctl/flightctl/internal/auth"
 )
 
 // (GET /api/v1/auth/config)
-func (h *ServiceHandler) AuthConfig(ctx context.Context, request server.AuthConfigRequestObject) (server.AuthConfigResponseObject, error) {
+func (h *TransportHandler) AuthConfig(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
 	authN := auth.GetAuthN()
 	if _, ok := authN.(auth.NilAuth); ok {
-		return server.AuthConfig418Response{}, nil
+		w.WriteHeader(http.StatusTeapot)
+		return
 	}
+	w.WriteHeader(http.StatusOK)
 
 	authConfig := authN.GetAuthConfig()
 
-	return server.AuthConfig200JSONResponse{
+	conf := api.AuthConfig{
 		AuthType: authConfig.Type,
 		AuthURL:  authConfig.Url,
-	}, nil
+	}
+	err := json.NewEncoder(w).Encode(conf)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
 }
 
 // (GET /api/v1/auth/validate)
-func (h *ServiceHandler) AuthValidate(ctx context.Context, request server.AuthValidateRequestObject) (server.AuthValidateResponseObject, error) {
+func (h *TransportHandler) AuthValidate(w http.ResponseWriter, r *http.Request, params api.AuthValidateParams) {
 	authn := auth.GetAuthN()
 	if _, ok := authn.(auth.NilAuth); ok {
-		return server.AuthValidate418Response{}, nil
+		w.WriteHeader(http.StatusTeapot)
+		return
 	}
-	if request.Params.Authorization == nil {
-		return server.AuthValidate401Response{}, nil
+	if params.Authorization == nil {
+		w.WriteHeader(http.StatusUnauthorized)
+		return
 	}
-	token, ok := auth.ParseAuthHeader(*request.Params.Authorization)
+	token, ok := auth.ParseAuthHeader(*params.Authorization)
 	if !ok {
-		return server.AuthValidate401Response{}, nil
+		w.WriteHeader(http.StatusUnauthorized)
+		return
 	}
-	valid, err := authn.ValidateToken(ctx, token)
+	valid, err := authn.ValidateToken(r.Context(), token)
 	if err != nil {
-		return server.AuthValidate500JSONResponse(api.StatusInternalServerError(err.Error())), nil
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		_ = json.NewEncoder(w).Encode(api.StatusInternalServerError(err.Error()))
+		return
 	}
 	if !valid {
-		return server.AuthValidate401Response{}, nil
+		w.WriteHeader(http.StatusUnauthorized)
+		return
 	}
-	return server.AuthValidate200Response{}, nil
+	w.WriteHeader(http.StatusOK)
 }

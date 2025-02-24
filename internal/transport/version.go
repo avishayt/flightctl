@@ -3,14 +3,15 @@ package transport
 import (
 	"net/http"
 
-	"github.com/flightctl/flightctl/internal/api/server"
+	api "github.com/flightctl/flightctl/api/v1alpha1"
 	"github.com/flightctl/flightctl/pkg/version"
 )
 
 // (GET /api/version)
 func (h *TransportHandler) GetVersion(w http.ResponseWriter, r *http.Request) {
 	versionInfo := version.Get()
-	return server.GetVersion200JSONResponse{
+	v := api.Version{
 		Version: versionInfo.GitVersion,
-	}, nil
+	}
+	SetResponse(w, v, api.Status{Code: 200})
 }

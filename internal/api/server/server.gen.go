@@ -184,7 +184,7 @@ type ServerInterface interface {
 	DeleteResourceSyncs(w http.ResponseWriter, r *http.Request)
 
 	// (GET /api/v1/resourcesyncs)
-	ListResourceSync(w http.ResponseWriter, r *http.Request, params ListResourceSyncParams)
+	ListResourceSyncs(w http.ResponseWriter, r *http.Request, params ListResourceSyncsParams)
 
 	// (POST /api/v1/resourcesyncs)
 	CreateResourceSync(w http.ResponseWriter, r *http.Request)
@@ -490,7 +490,7 @@ func (_ Unimplemented) DeleteResourceSyncs(w http.ResponseWriter, r *http.Reques
 }
 
 // (GET /api/v1/resourcesyncs)
-func (_ Unimplemented) ListResourceSync(w http.ResponseWriter, r *http.Request, params ListResourceSyncParams) {
+func (_ Unimplemented) ListResourceSyncs(w http.ResponseWriter, r *http.Request, params ListResourceSyncsParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -2095,14 +2095,14 @@ func (siw *ServerInterfaceWrapper) DeleteResourceSyncs(w http.ResponseWriter, r 
 	handler.ServeHTTP(w, r.WithContext(ctx))
 }
 
-// ListResourceSync operation middleware
-func (siw *ServerInterfaceWrapper) ListResourceSync(w http.ResponseWriter, r *http.Request) {
+// ListResourceSyncs operation middleware
+func (siw *ServerInterfaceWrapper) ListResourceSyncs(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	var err error
 
 	// Parameter object where we will unmarshal all parameters from the context
-	var params ListResourceSyncParams
+	var params ListResourceSyncsParams
 
 	// ------------- Optional query parameter "continue" -------------
 
@@ -2137,7 +2137,7 @@ func (siw *ServerInterfaceWrapper) ListResourceSync(w http.ResponseWriter, r *ht
 	}
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ListResourceSync(w, r, params)
+		siw.Handler.ListResourceSyncs(w, r, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -2563,7 +2563,7 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Delete(options.BaseURL+"/api/v1/resourcesyncs", wrapper.DeleteResourceSyncs)
 	})
 	r.Group(func(r chi.Router) {
-		r.Get(options.BaseURL+"/api/v1/resourcesyncs", wrapper.ListResourceSync)
+		r.Get(options.BaseURL+"/api/v1/resourcesyncs", wrapper.ListResourceSyncs)
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/api/v1/resourcesyncs", wrapper.CreateResourceSync)

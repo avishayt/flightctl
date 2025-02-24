@@ -31,6 +31,14 @@ func StatusOK() Status {
 	return NewSuccessStatus(http.StatusOK, http.StatusText(http.StatusOK), "")
 }
 
+func StatusCreated() Status {
+	return NewSuccessStatus(http.StatusCreated, http.StatusText(http.StatusCreated), "")
+}
+
+func StatusNoContent() Status {
+	return NewSuccessStatus(http.StatusNoContent, http.StatusText(http.StatusNoContent), "")
+}
+
 func StatusBadRequest(message string) Status {
 	return NewFailureStatus(http.StatusBadRequest, http.StatusText(http.StatusBadRequest), message)
 }

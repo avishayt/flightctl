@@ -123,7 +123,7 @@ func NewTestApiServer(log logrus.FieldLogger, cfg *config.Config, store store.St
 }
 
 // NewTestServer creates a new test server and returns the server and the listener listening on localhost's next available port.
-func NewTestAgentServer(log logrus.FieldLogger, cfg *config.Config, store store.Store, ca *crypto.CA, serverCerts *crypto.TLSCertificateConfig) (*agentserver.AgentServer, net.Listener, error) {
+func NewTestAgentServer(log logrus.FieldLogger, cfg *config.Config, store store.Store, ca *crypto.CA, serverCerts *crypto.TLSCertificateConfig, provider queues.Provider) (*agentserver.AgentServer, net.Listener, error) {
 	// create a listener using the next available port
 	_, tlsConfig, err := crypto.TLSConfigForServer(ca.Config, serverCerts)
 	if err != nil {
@@ -138,7 +138,7 @@ func NewTestAgentServer(log logrus.FieldLogger, cfg *config.Config, store store.
 
 	metrics := instrumentation.NewApiMetrics(cfg)
 
-	return agentserver.New(log, cfg, store, ca, listener, tlsConfig, metrics), listener, nil
+	return agentserver.New(log, cfg, store, ca, listener, provider, tlsConfig, metrics), listener, nil
 }
 
 // NewTestStore creates a new test store and returns the store and the database name.

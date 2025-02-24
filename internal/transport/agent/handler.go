@@ -1,28 +1,28 @@
-package transport
+package agenttransport
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"net/http"
 	"strings"
 
-	"github.com/flightctl/flightctl/internal/api/server"
+	api "github.com/flightctl/flightctl/api/v1alpha1"
 	agentServer "github.com/flightctl/flightctl/internal/api/server/agent"
 	"github.com/flightctl/flightctl/internal/api_server/middleware"
 	"github.com/flightctl/flightctl/internal/crypto"
-	"github.com/flightctl/flightctl/internal/service/common"
-	"github.com/flightctl/flightctl/internal/store"
+	"github.com/flightctl/flightctl/internal/service"
+	"github.com/flightctl/flightctl/internal/transport"
 	"github.com/sirupsen/logrus"
 )
 
-type AgentServiceHandler struct {
-	store             store.Store
-	ca                *crypto.CA
-	log               logrus.FieldLogger
-	agentGrpcEndpoint string
+type AgentTransportHandler struct {
+	serviceHandler *service.ServiceHandler
+	log            logrus.FieldLogger
 }
 
 // Make sure we conform to servers Service interface
-var _ agentServer.Service = (*AgentServiceHandler)(nil)
+var _ agentServer.Transport = (*AgentTransportHandler)(nil)
 
 func ValidateDeviceAccessFromContext(ctx context.Context, name string, log logrus.FieldLogger) error {
 	cn, ok := ctx.Value(middleware.TLSCommonNameContextKey).(string)
@@ -54,73 +54,70 @@ func ValidateEnrollmentAccessFromContext(ctx context.Context, log logrus.FieldLo
 	return nil
 }
 
-func NewAgentServiceHandler(store store.Store, ca *crypto.CA, log logrus.FieldLogger, agentGrpcEndpoint string) *AgentServiceHandler {
-	return &AgentServiceHandler{
-		store:             store,
-		ca:                ca,
-		log:               log,
-		agentGrpcEndpoint: agentGrpcEndpoint,
-	}
+func NewAgentTransportHandler(serviceHandler *service.ServiceHandler, log logrus.FieldLogger) *AgentTransportHandler {
+	return &AgentTransportHandler{serviceHandler: serviceHandler, log: log}
 }
 
 // (GET /api/v1/devices/{name}/rendered)
-func (s *AgentServiceHandler) GetRenderedDevice(ctx context.Context, request agentServer.GetRenderedDeviceRequestObject) (agentServer.GetRenderedDeviceResponseObject, error) {
+func (s *AgentTransportHandler) GetRenderedDevice(w http.ResponseWriter, r *http.Request, name string, params api.GetRenderedDeviceParams) {
 
-	if err := ValidateDeviceAccessFromContext(ctx, request.Name, s.log); err != nil {
-		return agentServer.GetRenderedDevice401JSONResponse{
-			Message: err.Error(),
-		}, err
+	if err := ValidateDeviceAccessFromContext(r.Context(), name, s.log); err != nil {
+		status := api.StatusUnauthorized(http.StatusText(http.StatusUnauthorized))
+		transport.SetResponse(w, status, status)
+		return
 	}
 
-	serverRequest := server.GetRenderedDeviceRequestObject{
-		Name:   request.Name,
-		Params: request.Params,
-	}
-
-	return common.GetRenderedDevice(ctx, s.store, s.log, serverRequest, s.agentGrpcEndpoint)
+	body, status := s.serviceHandler.GetRenderedDevice(r.Context(), name, params)
+	transport.SetResponse(w, body, status)
 }
 
 // (PUT /api/v1/devices/{name}/status)
-func (s *AgentServiceHandler) ReplaceDeviceStatus(ctx context.Context, request agentServer.ReplaceDeviceStatusRequestObject) (agentServer.ReplaceDeviceStatusResponseObject, error) {
+func (s *AgentTransportHandler) ReplaceDeviceStatus(w http.ResponseWriter, r *http.Request, name string) {
 
-	if err := ValidateDeviceAccessFromContext(ctx, request.Name, s.log); err != nil {
-		return agentServer.ReplaceDeviceStatus401JSONResponse{
-			Message: err.Error(),
-		}, err
+	if err := ValidateDeviceAccessFromContext(r.Context(), name, s.log); err != nil {
+		status := api.StatusUnauthorized(http.StatusText(http.StatusUnauthorized))
+		transport.SetResponse(w, status, status)
+		return
 	}
 
-	serverRequest := server.ReplaceDeviceStatusRequestObject{
-		Name: request.Name,
-		Body: request.Body,
+	var device api.Device
+	if err := json.NewDecoder(r.Body).Decode(&device); err != nil {
+		transport.SetParseFailureResponse(w, err)
+		return
 	}
-	return common.ReplaceDeviceStatus(ctx, s.store, s.log, serverRequest)
+
+	body, status := s.serviceHandler.ReplaceDevice(r.Context(), name, device)
+	transport.SetResponse(w, body, status)
 }
 
 // (POST /api/v1/enrollmentrequests)
-func (s *AgentServiceHandler) CreateEnrollmentRequest(ctx context.Context, request agentServer.CreateEnrollmentRequestRequestObject) (agentServer.CreateEnrollmentRequestResponseObject, error) {
+func (s *AgentTransportHandler) CreateEnrollmentRequest(w http.ResponseWriter, r *http.Request) {
 
-	if err := ValidateEnrollmentAccessFromContext(ctx, s.log); err != nil {
-		return agentServer.CreateEnrollmentRequest401JSONResponse{
-			Message: err.Error(),
-		}, err
+	if err := ValidateEnrollmentAccessFromContext(r.Context(), s.log); err != nil {
+		status := api.StatusUnauthorized(http.StatusText(http.StatusUnauthorized))
+		transport.SetResponse(w, status, status)
+		return
 	}
 
-	serverRequest := server.CreateEnrollmentRequestRequestObject{
-		Body: request.Body,
+	var er api.EnrollmentRequest
+	if err := json.NewDecoder(r.Body).Decode(&er); err != nil {
+		transport.SetParseFailureResponse(w, err)
+		return
 	}
-	return common.CreateEnrollmentRequest(ctx, s.store, serverRequest)
+
+	body, status := s.serviceHandler.CreateEnrollmentRequest(r.Context(), er)
+	transport.SetResponse(w, body, status)
 }
 
 // (GET /api/v1/enrollmentrequests/{name})
-func (s *AgentServiceHandler) ReadEnrollmentRequest(ctx context.Context, request agentServer.ReadEnrollmentRequestRequestObject) (agentServer.ReadEnrollmentRequestResponseObject, error) {
+func (s *AgentTransportHandler) ReadEnrollmentRequest(w http.ResponseWriter, r *http.Request, name string) {
 
-	if err := ValidateEnrollmentAccessFromContext(ctx, s.log); err != nil {
-		return agentServer.ReadEnrollmentRequest401JSONResponse{
-			Message: err.Error(),
-		}, err
+	if err := ValidateEnrollmentAccessFromContext(r.Context(), s.log); err != nil {
+		status := api.StatusUnauthorized(http.StatusText(http.StatusUnauthorized))
+		transport.SetResponse(w, status, status)
+		return
 	}
-	serverRequest := server.ReadEnrollmentRequestRequestObject{
-		Name: request.Name,
-	}
-	return common.ReadEnrollmentRequest(ctx, s.store, serverRequest)
+
+	body, status := s.serviceHandler.ReadEnrollmentRequest(r.Context(), name)
+	transport.SetResponse(w, body, status)
 }

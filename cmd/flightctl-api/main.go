@@ -9,6 +9,7 @@ import (
 	"syscall"
 	"time"
 
+	api "github.com/flightctl/flightctl/api/v1alpha1"
 	apiserver "github.com/flightctl/flightctl/internal/api_server"
 	"github.com/flightctl/flightctl/internal/api_server/agentserver"
 	"github.com/flightctl/flightctl/internal/api_server/middleware"
@@ -16,6 +17,7 @@ import (
 	"github.com/flightctl/flightctl/internal/config"
 	"github.com/flightctl/flightctl/internal/crypto"
 	"github.com/flightctl/flightctl/internal/instrumentation"
+	"github.com/flightctl/flightctl/internal/service"
 	"github.com/flightctl/flightctl/internal/store"
 	"github.com/flightctl/flightctl/pkg/log"
 	"github.com/flightctl/flightctl/pkg/queues"
@@ -130,6 +132,7 @@ func main() {
 	}
 
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGHUP, syscall.SIGTERM, syscall.SIGQUIT)
+	ctx = context.WithValue(ctx, service.InternalRequestCtxKey, false)
 
 	provider, err := queues.NewRedisProvider(ctx, log, cfg.KV.Hostname, cfg.KV.Port, cfg.KV.Password)
 	if err != nil {
@@ -153,6 +156,7 @@ func main() {
 		}
 		// we pass the grpc server for now, to let the console sessions to establish a connection in grpc
 		server := apiserver.New(log, cfg, store, ca, listener, provider, metrics, agentserver.GetGRPCServer())
+		ctx = context.WithValue(ctx, service.EventSourceCtxKey, string(api.ServiceApi))
 		if err := server.Run(ctx); err != nil {
 			log.Fatalf("Error running server: %s", err)
 		}
@@ -160,6 +164,7 @@ func main() {
 	}()
 
 	go func() {
+		ctx = context.WithValue(ctx, service.EventSourceCtxKey, string(api.DeviceAgent))
 		if err := agentserver.Run(ctx); err != nil {
 			log.Fatalf("Error running server: %s", err)
 		}

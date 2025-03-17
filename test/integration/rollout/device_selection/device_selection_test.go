@@ -118,7 +118,7 @@ var _ = Describe("Rollout batch sequence test", func() {
 	}
 	updateDeviceLabels := func(device *api.Device, labels map[string]string) {
 		device.Metadata.Labels = &labels
-		_, err := storeInst.Device().Update(ctx, store.NullOrgId, device, nil, false, nil, nil)
+		_, _, err := storeInst.Device().Update(ctx, store.NullOrgId, device, nil, false, nil, nil)
 		Expect(err).ToNot(HaveOccurred())
 	}
 	setRolledOut := func(deviceName string) {
@@ -153,14 +153,14 @@ var _ = Describe("Rollout batch sequence test", func() {
 		var condition *api.Condition
 		for i := range device.Status.Conditions {
 			c := &device.Status.Conditions[i]
-			if c.Type == api.DeviceUpdating {
+			if c.Type == api.ConditionTypeDeviceUpdating {
 				condition = c
 				break
 			}
 		}
 		if condition == nil {
 			device.Status.Conditions = append(device.Status.Conditions, api.Condition{
-				Type: api.DeviceUpdating,
+				Type: api.ConditionTypeDeviceUpdating,
 			})
 			condition = &device.Status.Conditions[len(device.Status.Conditions)-1]
 		}
@@ -671,7 +671,7 @@ var _ = Describe("Rollout batch sequence test", func() {
 					fleet.Spec.RolloutPolicy = &api.RolloutPolicy{}
 				}
 				fleet.Spec.RolloutPolicy.DeviceSelection = definition
-				_, err = storeInst.Fleet().Update(ctx, store.NullOrgId, fleet, nil, false, nil)
+				_, _, err = storeInst.Fleet().Update(ctx, store.NullOrgId, fleet, nil, false, nil)
 				Expect(err).ToNot(HaveOccurred())
 			}
 			fromBatchSequence := func(b api.BatchSequence) *api.RolloutDeviceSelection {

@@ -3272,6 +3272,10 @@ paths:
                 $ref: '#/components/schemas/Status'
 components:
   schemas:
+    ResourceType:
+      type: string
+      enum: [CertificateSigningRequest, EnrollmentRequest, Device, Fleet, Repository, ResourceSync, TemplateVersion]
+      description: Resource types exposed via the API.
     DeviceDecommissionTargetType:
       type: string
       enum:
@@ -5038,4 +5042,88 @@ components:
           type: string
       required:
         - version
-
+    Event:
+      type: object
+      required:
+        - type
+        - source
+        - status
+        - message
+        - severity
+        - resource_name
+        - resource_type
+        - timestamp
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique identifier for the event.
+        timestamp:
+          type: string
+          format: date-time
+          description: Timestamp when the event occurred.
+        type:
+          type: string
+          description: Type of event.
+          enum:
+          - ResourceCreated
+          - ResourceUpdated
+          - ResourceDeleted
+          - DeviceDecommissioned
+          - EnrollmentRequestApproved
+        source:
+          type: string
+          description: The component or service that generated the event.
+          enum:
+            - service-api
+            - service-periodic
+            - service-task
+            - device-agent
+        actor_user:
+          type: string
+          nullable: true
+          description: User who triggered the event (if applicable).
+        actor_service:
+          type: string
+          nullable: true
+          description: Automated service or system that triggered the event (if applicable).
+        status:
+          type: string
+          enum: [success, failure, in-progress]
+          description: Current state of the event, indicating whether the action was completed successfully, failed, or is still ongoing.
+        severity:
+          type: string
+          enum: [info, warning, critical]
+          description: The severity level of the event.
+        message:
+          type: string
+          description: A human-readable message describing the event.
+        details:
+          $ref: '#/components/schemas/EventDetails'
+          description: Event-specific details, structured based on event type.
+        correlation_id:
+          type: string
+          nullable: true
+          description: Correlation ID for tracking related events across multiple operations.
+        resource_name:
+          type: string
+          description: Unique identifier of the resource associated with the event.
+        resource_type:
+          $ref: '#/components/schemas/ResourceType'
+          description: The type of resource the event is associated with.
+    EventDetails:
+      type: object
+      description: Event-specific details, structured based on event type.
+      oneOf:
+        - $ref: "#/components/schemas/ResourceUpdatedDetails"
+    ResourceUpdatedDetails:
+      type: object
+      required:
+      - updated_fields
+      properties:
+        updated_fields:
+          type: array
+          items:
+            type: string
+            enum: [owner, labels, spec]
+          description: List of fields that were updated in the resource.

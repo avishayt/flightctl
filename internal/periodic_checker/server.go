@@ -7,6 +7,7 @@ import (
 	"syscall"
 	"time"
 
+	api "github.com/flightctl/flightctl/api/v1alpha1"
 	"github.com/flightctl/flightctl/internal/config"
 	"github.com/flightctl/flightctl/internal/kvstore"
 	"github.com/flightctl/flightctl/internal/rollout/device_selection"
@@ -42,6 +43,8 @@ func New(
 // TODO: expose metrics
 func (s *Server) Run() error {
 	ctx, cancel := context.WithCancel(context.Background())
+	ctx = context.WithValue(ctx, service.InternalRequestCtxKey, true)
+	ctx = context.WithValue(ctx, service.EventSourceCtxKey, string(api.ServicePeriodic))
 	defer cancel()
 
 	queuesProvider, err := queues.NewRedisProvider(context.Background(), s.log, s.cfg.KV.Hostname, s.cfg.KV.Port, s.cfg.KV.Password)

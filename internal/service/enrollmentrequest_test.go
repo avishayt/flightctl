@@ -21,6 +21,10 @@ func (s *EnrollmentRequestStore) EnrollmentRequest() store.EnrollmentRequest {
 	return &DummyEnrollmentRequest{EnrollmentVal: s.EnrollmentVal}
 }
 
+func (s *EnrollmentRequestStore) Event() store.Event {
+	return &DummyEvent{}
+}
+
 type DummyEnrollmentRequest struct {
 	store.EnrollmentRequestStore
 	EnrollmentVal v1alpha1.EnrollmentRequest
@@ -45,7 +49,7 @@ func TestAlreadyApprovedEnrollmentRequestApprove(t *testing.T) {
 	}
 	status := v1alpha1.EnrollmentRequestStatus{
 		Conditions: []v1alpha1.Condition{{
-			Type:    v1alpha1.EnrollmentRequestApproved,
+			Type:    v1alpha1.ConditionTypeEnrollmentRequestApproved,
 			Status:  v1alpha1.ConditionStatusTrue,
 			Reason:  "ManuallyApproved",
 			Message: "Approved by "}},

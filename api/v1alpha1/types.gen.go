@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/oapi-codegen/runtime"
+	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
 // Defines values for ApplicationStatusType.
@@ -39,21 +40,21 @@ const (
 
 // Defines values for ConditionType.
 const (
-	CertificateSigningRequestApproved ConditionType = "Approved"
-	CertificateSigningRequestDenied   ConditionType = "Denied"
-	CertificateSigningRequestFailed   ConditionType = "Failed"
-	DeviceDecommissioning             ConditionType = "DeviceDecommissioning"
-	DeviceMultipleOwners              ConditionType = "MultipleOwners"
-	DeviceSpecValid                   ConditionType = "SpecValid"
-	DeviceUpdating                    ConditionType = "Updating"
-	EnrollmentRequestApproved         ConditionType = "Approved"
-	FleetOverlappingSelectors         ConditionType = "OverlappingSelectors"
-	FleetRolloutInProgress            ConditionType = "RolloutInProgress"
-	FleetValid                        ConditionType = "Valid"
-	RepositoryAccessible              ConditionType = "Accessible"
-	ResourceSyncAccessible            ConditionType = "Accessible"
-	ResourceSyncResourceParsed        ConditionType = "ResourceParsed"
-	ResourceSyncSynced                ConditionType = "Synced"
+	ConditionTypeCertificateSigningRequestApproved ConditionType = "Approved"
+	ConditionTypeCertificateSigningRequestDenied   ConditionType = "Denied"
+	ConditionTypeCertificateSigningRequestFailed   ConditionType = "Failed"
+	ConditionTypeDeviceDecommissioning             ConditionType = "DeviceDecommissioning"
+	ConditionTypeDeviceMultipleOwners              ConditionType = "MultipleOwners"
+	ConditionTypeDeviceSpecValid                   ConditionType = "SpecValid"
+	ConditionTypeDeviceUpdating                    ConditionType = "Updating"
+	ConditionTypeEnrollmentRequestApproved         ConditionType = "Approved"
+	ConditionTypeFleetOverlappingSelectors         ConditionType = "OverlappingSelectors"
+	ConditionTypeFleetRolloutInProgress            ConditionType = "RolloutInProgress"
+	ConditionTypeFleetValid                        ConditionType = "Valid"
+	ConditionTypeRepositoryAccessible              ConditionType = "Accessible"
+	ConditionTypeResourceSyncAccessible            ConditionType = "Accessible"
+	ConditionTypeResourceSyncResourceParsed        ConditionType = "ResourceParsed"
+	ConditionTypeResourceSyncSynced                ConditionType = "Synced"
 )
 
 // Defines values for DeviceDecommissionTargetType.
@@ -113,6 +114,37 @@ const (
 	DeviceUpdatedStatusUpdating  DeviceUpdatedStatusType = "Updating"
 )
 
+// Defines values for EventSeverity.
+const (
+	Critical EventSeverity = "critical"
+	Info     EventSeverity = "info"
+	Warning  EventSeverity = "warning"
+)
+
+// Defines values for EventSource.
+const (
+	DeviceAgent     EventSource = "device-agent"
+	ServiceApi      EventSource = "service-api"
+	ServicePeriodic EventSource = "service-periodic"
+	ServiceTask     EventSource = "service-task"
+)
+
+// Defines values for EventStatus.
+const (
+	Failure    EventStatus = "failure"
+	InProgress EventStatus = "in-progress"
+	Success    EventStatus = "success"
+)
+
+// Defines values for EventType.
+const (
+	EventTypeDeviceDecommissioned      EventType = "DeviceDecommissioned"
+	EventTypeEnrollmentRequestApproved EventType = "EnrollmentRequestApproved"
+	EventTypeResourceCreated           EventType = "ResourceCreated"
+	EventTypeResourceDeleted           EventType = "ResourceDeleted"
+	EventTypeResourceUpdated           EventType = "ResourceUpdated"
+)
+
 // Defines values for FileOperation.
 const (
 	FileOperationCreated FileOperation = "created"
@@ -152,6 +184,24 @@ const (
 	ResourceAlertSeverityTypeCritical ResourceAlertSeverityType = "Critical"
 	ResourceAlertSeverityTypeInfo     ResourceAlertSeverityType = "Info"
 	ResourceAlertSeverityTypeWarning  ResourceAlertSeverityType = "Warning"
+)
+
+// Defines values for ResourceType.
+const (
+	ResourceTypeCertificateSigningRequest ResourceType = "CertificateSigningRequest"
+	ResourceTypeDevice                    ResourceType = "Device"
+	ResourceTypeEnrollmentRequest         ResourceType = "EnrollmentRequest"
+	ResourceTypeFleet                     ResourceType = "Fleet"
+	ResourceTypeRepository                ResourceType = "Repository"
+	ResourceTypeResourceSync              ResourceType = "ResourceSync"
+	ResourceTypeTemplateVersion           ResourceType = "TemplateVersion"
+)
+
+// Defines values for ResourceUpdatedDetailsUpdatedFields.
+const (
+	Labels ResourceUpdatedDetailsUpdatedFields = "labels"
+	Owner  ResourceUpdatedDetailsUpdatedFields = "owner"
+	Spec   ResourceUpdatedDetailsUpdatedFields = "spec"
 )
 
 // Defines values for RolloutStrategy.
@@ -763,6 +813,65 @@ type EnrollmentServiceService struct {
 	Server string `json:"server"`
 }
 
+// Event defines model for Event.
+type Event struct {
+	// ActorService Automated service or system that triggered the event (if applicable).
+	ActorService *string `json:"actor_service"`
+
+	// ActorUser User who triggered the event (if applicable).
+	ActorUser *string `json:"actor_user"`
+
+	// CorrelationId Correlation ID for tracking related events across multiple operations.
+	CorrelationId *string `json:"correlation_id"`
+
+	// Details Event-specific details, structured based on event type.
+	Details *EventDetails `json:"details,omitempty"`
+
+	// Id Unique identifier for the event.
+	Id *openapi_types.UUID `json:"id,omitempty"`
+
+	// Message A human-readable message describing the event.
+	Message string `json:"message"`
+
+	// ResourceName Unique identifier of the resource associated with the event.
+	ResourceName string `json:"resource_name"`
+
+	// ResourceType Resource types exposed via the API.
+	ResourceType ResourceType `json:"resource_type"`
+
+	// Severity The severity level of the event.
+	Severity EventSeverity `json:"severity"`
+
+	// Source The component or service that generated the event.
+	Source EventSource `json:"source"`
+
+	// Status Current state of the event, indicating whether the action was completed successfully, failed, or is still ongoing.
+	Status EventStatus `json:"status"`
+
+	// Timestamp Timestamp when the event occurred.
+	Timestamp time.Time `json:"timestamp"`
+
+	// Type Type of event.
+	Type EventType `json:"type"`
+}
+
+// EventSeverity The severity level of the event.
+type EventSeverity string
+
+// EventSource The component or service that generated the event.
+type EventSource string
+
+// EventStatus Current state of the event, indicating whether the action was completed successfully, failed, or is still ongoing.
+type EventStatus string
+
+// EventType Type of event.
+type EventType string
+
+// EventDetails Event-specific details, structured based on event type.
+type EventDetails struct {
+	union json.RawMessage
+}
+
 // FileOperation defines model for FileOperation.
 type FileOperation string
 
@@ -1243,6 +1352,18 @@ type ResourceSyncStatus struct {
 	// ObservedGeneration The last generation that was synced.
 	ObservedGeneration *int64 `json:"observedGeneration,omitempty"`
 }
+
+// ResourceType Resource types exposed via the API.
+type ResourceType string
+
+// ResourceUpdatedDetails defines model for ResourceUpdatedDetails.
+type ResourceUpdatedDetails struct {
+	// UpdatedFields List of fields that were updated in the resource.
+	UpdatedFields []ResourceUpdatedDetailsUpdatedFields `json:"updated_fields"`
+}
+
+// ResourceUpdatedDetailsUpdatedFields defines model for ResourceUpdatedDetails.UpdatedFields.
+type ResourceUpdatedDetailsUpdatedFields string
 
 // RolloutDeviceSelection Describes how to select devices for rollout.
 type RolloutDeviceSelection struct {
@@ -1901,6 +2022,44 @@ func (t ConfigProviderSpec) MarshalJSON() ([]byte, error) {
 }
 
 func (t *ConfigProviderSpec) UnmarshalJSON(b []byte) error {
+	err := t.union.UnmarshalJSON(b)
+	return err
+}
+
+// AsResourceUpdatedDetails returns the union data inside the EventDetails as a ResourceUpdatedDetails
+func (t EventDetails) AsResourceUpdatedDetails() (ResourceUpdatedDetails, error) {
+	var body ResourceUpdatedDetails
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromResourceUpdatedDetails overwrites any union data inside the EventDetails as the provided ResourceUpdatedDetails
+func (t *EventDetails) FromResourceUpdatedDetails(v ResourceUpdatedDetails) error {
+	fmt.Printf("v: %v\n", v)
+	b, err := json.Marshal(v)
+	fmt.Printf("b: %v, err: %v, t: %v\n", b, err, t)
+	t.union = b
+	return err
+}
+
+// MergeResourceUpdatedDetails performs a merge with any union data inside the EventDetails, using the provided ResourceUpdatedDetails
+func (t *EventDetails) MergeResourceUpdatedDetails(v ResourceUpdatedDetails) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+func (t EventDetails) MarshalJSON() ([]byte, error) {
+	b, err := t.union.MarshalJSON()
+	return b, err
+}
+
+func (t *EventDetails) UnmarshalJSON(b []byte) error {
 	err := t.union.UnmarshalJSON(b)
 	return err
 }

@@ -16,8 +16,6 @@ import (
 	"github.com/flightctl/flightctl/internal/api/client"
 	"github.com/flightctl/flightctl/internal/auth/common"
 	"github.com/flightctl/flightctl/internal/crypto"
-	"github.com/flightctl/flightctl/pkg/reqid"
-	"github.com/go-chi/chi/middleware"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
@@ -195,7 +193,6 @@ func NewFromConfig(config *Config) (*client.ClientWithResponses, error) {
 		return nil, fmt.Errorf("NewFromConfig: creating HTTP client %w", err)
 	}
 	ref := client.WithRequestEditorFn(func(ctx context.Context, req *http.Request) error {
-		req.Header.Set(middleware.RequestIDHeader, reqid.GetReqID())
 		accessToken := GetAccessToken(config)
 		if accessToken != "" {
 			req.Header.Set(common.AuthHeader, fmt.Sprintf("Bearer %s", accessToken))

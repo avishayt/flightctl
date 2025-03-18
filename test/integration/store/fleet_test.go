@@ -376,7 +376,7 @@ var _ = Describe("FleetStore create", func() {
 			callback := store.FleetStoreCallback(func(uuid.UUID, *api.Fleet, *api.Fleet) {
 				called = true
 			})
-			_, created, err := storeInst.Fleet().CreateOrUpdate(ctx, orgId, &fleet, nil, true, callback)
+			_, created, _, err := storeInst.Fleet().CreateOrUpdate(ctx, orgId, &fleet, nil, true, callback)
 			Expect(called).To(BeTrue())
 			Expect(err).ToNot(HaveOccurred())
 			Expect(created).To(Equal(true))
@@ -419,10 +419,13 @@ var _ = Describe("FleetStore create", func() {
 			callback := store.FleetStoreCallback(func(uuid.UUID, *api.Fleet, *api.Fleet) {
 				called = true
 			})
-			returnedFleet, created, err := storeInst.Fleet().CreateOrUpdate(ctx, orgId, updatedFleet, nil, true, callback)
+			returnedFleet, created, details, err := storeInst.Fleet().CreateOrUpdate(ctx, orgId, updatedFleet, nil, true, callback)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(created).To(BeFalse())
 			Expect(called).To(BeTrue())
+			Expect(details.UpdatedFields).To(HaveLen(2))
+			Expect(details.UpdatedFields[0]).To(Equal(api.Spec))
+			Expect(details.UpdatedFields[1]).To(Equal(api.Labels))
 
 			Expect(returnedFleet.Metadata.Labels).ShouldNot(BeNil())
 
@@ -446,10 +449,12 @@ var _ = Describe("FleetStore create", func() {
 			callback := store.FleetStoreCallback(func(uuid.UUID, *api.Fleet, *api.Fleet) {
 				called = true
 			})
-			_, created, err := storeInst.Fleet().CreateOrUpdate(ctx, orgId, fleet, nil, true, callback)
+			_, created, details, err := storeInst.Fleet().CreateOrUpdate(ctx, orgId, fleet, nil, true, callback)
 			Expect(called).To(BeTrue())
 			Expect(err).ToNot(HaveOccurred())
 			Expect(created).To(BeFalse())
+			Expect(details.UpdatedFields).To(HaveLen(1))
+			Expect(details.UpdatedFields[0]).To(Equal(api.Spec))
 
 			updatedFleet, err := storeInst.Fleet().Get(ctx, orgId, "myfleet-1")
 			Expect(err).ToNot(HaveOccurred())

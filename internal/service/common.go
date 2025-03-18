@@ -5,17 +5,25 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/url"
+	"strings"
 
 	jsonpatch "github.com/evanphx/json-patch"
 	"github.com/flightctl/flightctl/api/v1alpha1"
 	api "github.com/flightctl/flightctl/api/v1alpha1"
+	commonauth "github.com/flightctl/flightctl/internal/auth/common"
 	"github.com/flightctl/flightctl/internal/flterrors"
+	"github.com/flightctl/flightctl/internal/store"
 	"github.com/flightctl/flightctl/internal/util"
 	"github.com/getkin/kin-openapi/openapi3filter"
 	"github.com/getkin/kin-openapi/routers/gorillamux"
+	"github.com/go-chi/chi/v5/middleware"
+	"github.com/google/uuid"
+	"github.com/samber/lo"
+	"github.com/sirupsen/logrus"
 )
 
 type ctxKey string
@@ -161,4 +169,152 @@ func ApiStatusToErr(status api.Status) error {
 		return nil
 	}
 	return errors.New(status.Message)
+}
+
+func ParseEventSource(s string) *api.EventSource {
+	switch api.EventSource(s) {
+	case api.DeviceAgent, api.ServiceApi, api.ServicePeriodic, api.ServiceTask:
+		return lo.ToPtr(api.EventSource(s))
+	default:
+		return nil
+	}
+}
+
+func getCommonEvent(ctx context.Context, status api.Status, resourceName string, resourceType api.ResourceType) *api.Event {
+	event := api.Event{
+		ResourceType: resourceType,
+		ResourceName: resourceName,
+		Severity:     api.Info,
+	}
+
+	if status.Code >= 200 && status.Code < 299 {
+		event.Status = api.Success
+	} else if status.Code >= 500 && status.Code < 599 {
+		event.Status = api.Failure
+	} else {
+		// If it's not one of the above cases, it's 4XX, which we don't emit events for
+		return nil
+	}
+
+	identity, err := commonauth.GetIdentity(ctx)
+	if err == nil && identity != nil {
+		event.ActorUser = &identity.Username
+	}
+
+	// Set correlationId to requestID
+	requestID := ctx.Value(middleware.RequestIDKey)
+	if requestID != nil {
+		if reqIDStr, ok := requestID.(string); ok {
+			event.CorrelationId = &reqIDStr
+		}
+	}
+
+	source := ctx.Value(EventSourceCtxKey)
+	if source != nil {
+		if sourceStr, ok := source.(string); ok {
+			e := ParseEventSource(sourceStr)
+			if e != nil {
+				event.Source = *e
+				if *e == api.ServiceTask || *e == api.ServicePeriodic {
+					event.ActorService = &sourceStr
+				}
+			}
+		}
+	}
+
+	return &event
+}
+
+func EmitDeviceDecommissionedEvent(ctx context.Context, eventStore store.Event, log logrus.FieldLogger, orgId uuid.UUID, status api.Status, resourceName string, resourceType api.ResourceType) {
+	event := getCommonEvent(ctx, status, resourceName, resourceType)
+	if event == nil {
+		return
+	}
+	event.Type = api.EventTypeDeviceDecommissioned
+	if status.Code == http.StatusOK {
+		event.Message = "Successfully decommissioned"
+	} else {
+		event.Message = status.Message
+	}
+	err := eventStore.Create(ctx, orgId, event)
+	if err != nil {
+		log.Errorf("failed emitting device decommissioned event for %s %s/%s: %v", resourceType, orgId, resourceName, err)
+		return
+	}
+}
+
+func EmitEnrollmentRequestApprovedEvent(ctx context.Context, eventStore store.Event, log logrus.FieldLogger, orgId uuid.UUID, status api.Status, resourceName string, resourceType api.ResourceType) {
+	event := getCommonEvent(ctx, status, resourceName, resourceType)
+	if event == nil {
+		return
+	}
+	event.Type = api.EventTypeEnrollmentRequestApproved
+	if status.Code == http.StatusOK {
+		event.Message = "Successfully approved"
+	} else {
+		event.Message = status.Message
+	}
+	err := eventStore.Create(ctx, orgId, event)
+	if err != nil {
+		log.Errorf("failed emitting enrollment request approved event for %s %s/%s: %v", resourceType, orgId, resourceName, err)
+		return
+	}
+}
+
+func EmitResourceDeletedEvent(ctx context.Context, eventStore store.Event, log logrus.FieldLogger, orgId uuid.UUID, status api.Status, resourceName string, resourceType api.ResourceType) {
+	event := getCommonEvent(ctx, status, resourceName, resourceType)
+	if event == nil {
+		return
+	}
+	event.Type = api.EventTypeResourceDeleted
+	if status.Code == http.StatusOK {
+		event.Message = "Successfully deleted"
+	} else {
+		event.Message = status.Message
+	}
+	err := eventStore.Create(ctx, orgId, event)
+	if err != nil {
+		log.Errorf("failed emitting resource updated event for %s %s/%s: %v", resourceType, orgId, resourceName, err)
+		return
+	}
+}
+
+func EmitResourceUpdatedEvent(ctx context.Context, eventStore store.Event, log logrus.FieldLogger, orgId uuid.UUID, status api.Status, resourceName string, resourceType api.ResourceType, details *api.ResourceUpdatedDetails) {
+	event := getCommonEvent(ctx, status, resourceName, resourceType)
+	if event == nil {
+		return
+	}
+
+	if status.Code == http.StatusOK {
+		fields := ""
+		if details != nil && len(details.UpdatedFields) > 0 {
+			stringFields := make([]string, len(details.UpdatedFields))
+			for i, field := range details.UpdatedFields {
+				stringFields[i] = string(field)
+			}
+			fields = fmt.Sprintf(" (including %s)", strings.Join(stringFields, ","))
+		}
+		event.Message = fmt.Sprintf("Successfully updated%s", fields)
+	} else if status.Code == http.StatusCreated {
+		event.Message = "Successfully created"
+	} else {
+		event.Message = status.Message
+	}
+
+	event.Type = api.EventTypeResourceCreated
+	if details != nil && status.Code != http.StatusCreated {
+		event.Type = api.EventTypeResourceUpdated
+		event.Details = &api.EventDetails{}
+		err := event.Details.FromResourceUpdatedDetails(*details)
+		if err != nil {
+			log.Errorf("failed emitting resource updated event for %s %s/%s: %v", resourceType, orgId, resourceName, err)
+			return
+		}
+	}
+
+	err := eventStore.Create(ctx, orgId, event)
+	if err != nil {
+		log.Errorf("failed emitting resource updated event for %s %s/%s: %v", resourceType, orgId, resourceName, err)
+		return
+	}
 }

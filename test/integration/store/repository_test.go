@@ -191,7 +191,7 @@ var _ = Describe("RepositoryStore create", func() {
 				Spec:   spec,
 				Status: nil,
 			}
-			repo, created, err := storeInst.Repository().CreateOrUpdate(ctx, orgId, &repository, callback)
+			repo, created, _, err := storeInst.Repository().CreateOrUpdate(ctx, orgId, &repository, callback)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(callbackCalled).To(BeTrue())
 			Expect(created).To(Equal(true))
@@ -218,7 +218,7 @@ var _ = Describe("RepositoryStore create", func() {
 				Spec:   spec,
 				Status: nil,
 			}
-			repo, created, err := storeInst.Repository().CreateOrUpdate(ctx, orgId, &repository, callback)
+			repo, created, details, err := storeInst.Repository().CreateOrUpdate(ctx, orgId, &repository, callback)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(callbackCalled).To(BeTrue())
 			Expect(created).To(Equal(false))
@@ -229,6 +229,9 @@ var _ = Describe("RepositoryStore create", func() {
 			Expect(repoSpec.Url).To(Equal("myotherrepo"))
 			Expect(repo.Status.Conditions).ToNot(BeNil())
 			Expect(repo.Status.Conditions).To(BeEmpty())
+			Expect(details.UpdatedFields).To(HaveLen(2))
+			Expect(details.UpdatedFields[0]).To(Equal(api.Spec))
+			Expect(details.UpdatedFields[1]).To(Equal(api.Labels))
 		})
 
 		It("CreateOrUpdateRepository create nilspec", func() {
@@ -245,7 +248,7 @@ var _ = Describe("RepositoryStore create", func() {
 				Spec:   spec,
 				Status: nil,
 			}
-			repo, created, err := storeInst.Repository().CreateOrUpdate(ctx, orgId, &repository, callback)
+			repo, created, _, err := storeInst.Repository().CreateOrUpdate(ctx, orgId, &repository, callback)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(callbackCalled).To(BeTrue())
 			Expect(created).To(Equal(true))

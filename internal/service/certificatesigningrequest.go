@@ -168,7 +168,9 @@ func (h *ServiceHandler) CreateCertificateSigningRequest(ctx context.Context, cs
 
 	result, err := h.store.CertificateSigningRequest().Create(ctx, orgId, &csr)
 	if err != nil {
-		return nil, StoreErrorToApiStatus(err, true, api.CertificateSigningRequestKind, csr.Metadata.Name)
+		status := StoreErrorToApiStatus(err, true, api.CertificateSigningRequestKind, csr.Metadata.Name)
+		EmitResourceUpdatedEvent(ctx, h.store.Event(), h.log, orgId, status, *csr.Metadata.Name, api.ResourceTypeCertificateSigningRequest, nil)
+		return nil, status
 	}
 
 	if result.Spec.SignerName == "enrollment" {
@@ -178,6 +180,7 @@ func (h *ServiceHandler) CreateCertificateSigningRequest(ctx context.Context, cs
 		h.signApprovedCertificateSigningRequest(ctx, orgId, result)
 	}
 
+	EmitResourceUpdatedEvent(ctx, h.store.Event(), h.log, orgId, api.StatusCreated(), *csr.Metadata.Name, api.ResourceTypeCertificateSigningRequest, nil)
 	return result, api.StatusCreated()
 }
 
@@ -225,9 +228,11 @@ func (h *ServiceHandler) PatchCertificateSigningRequest(ctx context.Context, nam
 	NilOutManagedObjectMetaProperties(&newObj.Metadata)
 	newObj.Metadata.ResourceVersion = nil
 
-	result, err := h.store.CertificateSigningRequest().Update(ctx, orgId, newObj)
+	result, details, err := h.store.CertificateSigningRequest().Update(ctx, orgId, newObj)
 	if err != nil {
-		return nil, StoreErrorToApiStatus(err, false, api.CertificateSigningRequestKind, &name)
+		status := StoreErrorToApiStatus(err, false, api.CertificateSigningRequestKind, &name)
+		EmitResourceUpdatedEvent(ctx, h.store.Event(), h.log, orgId, status, *newObj.Metadata.Name, api.ResourceTypeCertificateSigningRequest, &details)
+		return nil, status
 	}
 
 	if result.Spec.SignerName == "enrollment" {
@@ -237,6 +242,7 @@ func (h *ServiceHandler) PatchCertificateSigningRequest(ctx context.Context, nam
 		h.signApprovedCertificateSigningRequest(ctx, orgId, result)
 	}
 
+	EmitResourceUpdatedEvent(ctx, h.store.Event(), h.log, orgId, api.StatusOK(), *newObj.Metadata.Name, api.ResourceTypeCertificateSigningRequest, &details)
 	return result, api.StatusOK()
 }
 
@@ -254,9 +260,11 @@ func (h *ServiceHandler) ReplaceCertificateSigningRequest(ctx context.Context, n
 		return nil, api.StatusBadRequest("resource name specified in metadata does not match name in path")
 	}
 
-	result, created, err := h.store.CertificateSigningRequest().CreateOrUpdate(ctx, orgId, &csr)
+	result, created, details, err := h.store.CertificateSigningRequest().CreateOrUpdate(ctx, orgId, &csr)
 	if err != nil {
-		return nil, StoreErrorToApiStatus(err, created, api.CertificateSigningRequestKind, &name)
+		status := StoreErrorToApiStatus(err, false, api.CertificateSigningRequestKind, &name)
+		EmitResourceUpdatedEvent(ctx, h.store.Event(), h.log, orgId, status, *csr.Metadata.Name, api.ResourceTypeCertificateSigningRequest, &details)
+		return nil, status
 	}
 
 	if result.Spec.SignerName == "enrollment" {
@@ -266,7 +274,9 @@ func (h *ServiceHandler) ReplaceCertificateSigningRequest(ctx context.Context, n
 		h.signApprovedCertificateSigningRequest(ctx, orgId, result)
 	}
 
-	return result, StoreErrorToApiStatus(nil, created, api.CertificateSigningRequestKind, &name)
+	status := StoreErrorToApiStatus(nil, created, api.CertificateSigningRequestKind, &name)
+	EmitResourceUpdatedEvent(ctx, h.store.Event(), h.log, orgId, status, *csr.Metadata.Name, api.ResourceTypeCertificateSigningRequest, &details)
+	return result, status
 }
 
 // NOTE: Approval currently also issues a certificate - this will change in the future based on policy

@@ -21,6 +21,10 @@ func (s *FleetStore) Fleet() store.Fleet {
 	return &DummyFleet{FleetVal: s.FleetVal}
 }
 
+func (s *FleetStore) Event() store.Event {
+	return &DummyEvent{}
+}
+
 type DummyFleet struct {
 	store.Fleet
 	FleetVal api.Fleet
@@ -33,12 +37,12 @@ func (s *DummyFleet) Get(ctx context.Context, orgId uuid.UUID, name string, opts
 	return nil, flterrors.ErrResourceNotFound
 }
 
-func (s *DummyFleet) Update(ctx context.Context, orgId uuid.UUID, fleet *api.Fleet, fieldsToUnset []string, fromAPI bool, callback store.FleetStoreCallback) (*api.Fleet, error) {
-	return fleet, nil
+func (s *DummyFleet) Update(ctx context.Context, orgId uuid.UUID, fleet *api.Fleet, fieldsToUnset []string, fromAPI bool, callback store.FleetStoreCallback) (*api.Fleet, api.ResourceUpdatedDetails, error) {
+	return fleet, api.ResourceUpdatedDetails{}, nil
 }
 
-func (s *DummyFleet) CreateOrUpdate(ctx context.Context, orgId uuid.UUID, fleet *api.Fleet, fieldsToUnset []string, fromAPI bool, callback store.FleetStoreCallback) (*api.Fleet, bool, error) {
-	return fleet, false, nil
+func (s *DummyFleet) CreateOrUpdate(ctx context.Context, orgId uuid.UUID, fleet *api.Fleet, fieldsToUnset []string, fromAPI bool, callback store.FleetStoreCallback) (*api.Fleet, bool, api.ResourceUpdatedDetails, error) {
+	return fleet, false, api.ResourceUpdatedDetails{}, nil
 }
 
 func verifyFleetPatchFailed(require *require.Assertions, status api.Status) {

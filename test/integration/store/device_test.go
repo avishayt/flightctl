@@ -391,17 +391,18 @@ var _ = Describe("DeviceStore create", func() {
 			newDev := testutil.ReturnTestDevice(orgId, "owned-device", lo.ToPtr("ownerfleet"), nil, &map[string]string{"newkey": "newval"})
 			newDev.Metadata.ResourceVersion = dev.Metadata.ResourceVersion
 
-			_, _, err = devStore.CreateOrUpdate(ctx, orgId, &newDev, nil, true, nil, callback)
-
+			_, _, details, err := devStore.CreateOrUpdate(ctx, orgId, &newDev, nil, true, nil, callback)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(called).To(BeTrue())
+			Expect(details.UpdatedFields).To(HaveLen(1))
+			Expect(details.UpdatedFields[0]).To(Equal(api.Labels))
 		})
 
 		It("UpdateDeviceStatus", func() {
 			// Random Condition to make sure Conditions do get stored
 			status := api.NewDeviceStatus()
 			condition := api.Condition{
-				Type:               api.DeviceUpdating,
+				Type:               api.ConditionTypeDeviceUpdating,
 				LastTransitionTime: time.Now(),
 				Status:             api.ConditionStatusFalse,
 				Reason:             "reason",
@@ -425,7 +426,7 @@ var _ = Describe("DeviceStore create", func() {
 			Expect(dev.Kind).To(Equal(api.DeviceKind))
 			Expect(dev.Spec.Os.Image).To(Equal("os"))
 			Expect(dev.Status.Conditions).ToNot(BeEmpty())
-			Expect(api.IsStatusConditionFalse(dev.Status.Conditions, api.DeviceUpdating)).To(BeTrue())
+			Expect(api.IsStatusConditionFalse(dev.Status.Conditions, api.ConditionTypeDeviceUpdating)).To(BeTrue())
 		})
 
 		It("UpdateOwner", func() {

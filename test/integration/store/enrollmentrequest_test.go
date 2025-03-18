@@ -181,7 +181,7 @@ var _ = Describe("enrollmentRequestStore create", func() {
 				},
 				Status: nil,
 			}
-			er, created, err := storeInst.EnrollmentRequest().CreateOrUpdate(ctx, orgId, &enrollmentrequest)
+			er, created, _, err := storeInst.EnrollmentRequest().CreateOrUpdate(ctx, orgId, &enrollmentrequest)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(created).To(Equal(true))
 			Expect(er.ApiVersion).To(Equal(model.EnrollmentRequestAPIVersion()))
@@ -203,12 +203,15 @@ var _ = Describe("enrollmentRequestStore create", func() {
 					Certificate: lo.ToPtr("bogus-cert"),
 				},
 			}
-			er, created, err := storeInst.EnrollmentRequest().CreateOrUpdate(ctx, orgId, &enrollmentrequest)
+			er, created, details, err := storeInst.EnrollmentRequest().CreateOrUpdate(ctx, orgId, &enrollmentrequest)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(created).To(Equal(false))
 			Expect(er.ApiVersion).To(Equal(model.EnrollmentRequestAPIVersion()))
 			Expect(er.Kind).To(Equal(api.EnrollmentRequestKind))
 			Expect(er.Spec.Csr).To(Equal("new csr string"))
+			Expect(details.UpdatedFields).To(HaveLen(2))
+			Expect(details.UpdatedFields[0]).To(Equal(api.Spec))
+			Expect(details.UpdatedFields[1]).To(Equal(api.Labels))
 
 			er, err = storeInst.EnrollmentRequest().Get(ctx, orgId, "myenrollmentrequest-1")
 			Expect(err).ToNot(HaveOccurred())

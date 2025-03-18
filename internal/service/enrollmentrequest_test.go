@@ -21,6 +21,10 @@ func (s *EnrollmentRequestStore) EnrollmentRequest() store.EnrollmentRequest {
 	return &DummyEnrollmentRequest{EnrollmentVal: s.EnrollmentVal}
 }
 
+func (s *EnrollmentRequestStore) Event() store.Event {
+	return &DummyEvent{}
+}
+
 type DummyEnrollmentRequest struct {
 	store.EnrollmentRequestStore
 	EnrollmentVal v1alpha1.EnrollmentRequest

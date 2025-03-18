@@ -256,7 +256,7 @@ var _ = Describe("ResourceSyncStore create", func() {
 				},
 				Status: nil,
 			}
-			rs, created, err := storeInst.ResourceSync().CreateOrUpdate(ctx, orgId, &resourcesync)
+			rs, created, _, err := storeInst.ResourceSync().CreateOrUpdate(ctx, orgId, &resourcesync)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(created).To(Equal(true))
 			Expect(rs.ApiVersion).To(Equal(model.ResourceSyncAPIVersion()))
@@ -278,7 +278,7 @@ var _ = Describe("ResourceSyncStore create", func() {
 				},
 				Status: nil,
 			}
-			rs, created, err := storeInst.ResourceSync().CreateOrUpdate(ctx, orgId, &resourcesync)
+			rs, created, details, err := storeInst.ResourceSync().CreateOrUpdate(ctx, orgId, &resourcesync)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(created).To(Equal(false))
 			Expect(rs.ApiVersion).To(Equal(model.ResourceSyncAPIVersion()))
@@ -287,6 +287,9 @@ var _ = Describe("ResourceSyncStore create", func() {
 			Expect(rs.Spec.Path).To(Equal("my/other/path"))
 			Expect(rs.Status.Conditions).ToNot(BeNil())
 			Expect(rs.Status.Conditions).To(BeEmpty())
+			Expect(details.UpdatedFields).To(HaveLen(2))
+			Expect(details.UpdatedFields[0]).To(Equal(api.Spec))
+			Expect(details.UpdatedFields[1]).To(Equal(api.Labels))
 		})
 	})
 })

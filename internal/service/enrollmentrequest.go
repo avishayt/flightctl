@@ -98,6 +98,8 @@ func (h *ServiceHandler) createDeviceFromEnrollmentRequest(ctx context.Context, 
 		apiResource.Metadata.Labels = enrollmentRequest.Status.Approval.Labels
 	}
 	_, err := h.store.Device().Create(ctx, orgId, apiResource, h.callbackManager.DeviceUpdatedCallback)
+	retStatus := StoreErrorToApiStatus(err, true, api.DeviceKind, apiResource.Metadata.Name)
+	EmitResourceUpdatedEvent(ctx, h.store.Event(), h.log, orgId, retStatus, *apiResource.Metadata.Name, api.ResourceKindDevice, nil)
 	return err
 }
 
@@ -114,7 +116,9 @@ func (h *ServiceHandler) CreateEnrollmentRequest(ctx context.Context, er api.Enr
 	AddStatusIfNeeded(&er)
 
 	result, err := h.store.EnrollmentRequest().Create(ctx, orgId, &er)
-	return result, StoreErrorToApiStatus(err, true, api.EnrollmentRequestKind, er.Metadata.Name)
+	status := StoreErrorToApiStatus(err, true, api.EnrollmentRequestKind, er.Metadata.Name)
+	EmitResourceUpdatedEvent(ctx, h.store.Event(), h.log, orgId, status, *er.Metadata.Name, api.ResourceKindEnrollmentRequest, nil)
+	return result, status
 }
 
 func (h *ServiceHandler) ListEnrollmentRequests(ctx context.Context, params api.ListEnrollmentRequestsParams) (*api.EnrollmentRequestList, api.Status) {
@@ -194,8 +198,10 @@ func (h *ServiceHandler) ReplaceEnrollmentRequest(ctx context.Context, name stri
 
 	AddStatusIfNeeded(&er)
 
-	result, created, err := h.store.EnrollmentRequest().CreateOrUpdate(ctx, orgId, &er)
-	return result, StoreErrorToApiStatus(err, created, api.EnrollmentRequestKind, &name)
+	result, created, details, err := h.store.EnrollmentRequest().CreateOrUpdate(ctx, orgId, &er)
+	status := StoreErrorToApiStatus(err, created, api.EnrollmentRequestKind, &name)
+	EmitResourceUpdatedEvent(ctx, h.store.Event(), h.log, orgId, status, *er.Metadata.Name, api.ResourceKindEnrollmentRequest, &details)
+	return result, status
 }
 
 // Only metadata.labels and spec can be patched. If we try to patch other fields, HTTP 400 Bad Request is returned.
@@ -232,15 +238,19 @@ func (h *ServiceHandler) PatchEnrollmentRequest(ctx context.Context, name string
 	NilOutManagedObjectMetaProperties(&newObj.Metadata)
 	newObj.Metadata.ResourceVersion = nil
 
-	result, err := h.store.EnrollmentRequest().Update(ctx, orgId, newObj)
-	return result, StoreErrorToApiStatus(err, false, api.EnrollmentRequestKind, &name)
+	result, details, err := h.store.EnrollmentRequest().Update(ctx, orgId, newObj)
+	status := StoreErrorToApiStatus(err, false, api.EnrollmentRequestKind, &name)
+	EmitResourceUpdatedEvent(ctx, h.store.Event(), h.log, orgId, status, *newObj.Metadata.Name, api.ResourceKindEnrollmentRequest, &details)
+	return result, status
 }
 
 func (h *ServiceHandler) DeleteEnrollmentRequest(ctx context.Context, name string) api.Status {
 	orgId := store.NullOrgId
 
 	err := h.store.EnrollmentRequest().Delete(ctx, orgId, name)
-	return StoreErrorToApiStatus(err, false, api.EnrollmentRequestKind, &name)
+	status := StoreErrorToApiStatus(err, false, api.EnrollmentRequestKind, &name)
+	EmitResourceDeletedEvent(ctx, h.store.Event(), h.log, orgId, status, name, api.ResourceKindEnrollmentRequest)
+	return status
 }
 
 func (h *ServiceHandler) GetEnrollmentRequestStatus(ctx context.Context, name string) (*api.EnrollmentRequest, api.Status) {
@@ -258,46 +268,54 @@ func (h *ServiceHandler) ApproveEnrollmentRequest(ctx context.Context, name stri
 	}
 	enrollmentReq, err := h.store.EnrollmentRequest().Get(ctx, orgId, name)
 	if err != nil {
+		status := StoreErrorToApiStatus(err, false, api.EnrollmentRequestKind, &name)
+		EmitEnrollmentRequestApprovedEvent(ctx, h.store.Event(), h.log, orgId, status, name, api.ResourceKindEnrollmentRequest)
 		return nil, StoreErrorToApiStatus(err, false, api.EnrollmentRequestKind, &name)
 	}
 
 	approvalStatusToReturn := enrollmentReq.Status.Approval
 
-	// if the enrollment request was already approved we should not try to approve it one more time
-	if approval.Approved {
-		if api.IsStatusConditionTrue(enrollmentReq.Status.Conditions, api.ConditionTypeEnrollmentRequestApproved) {
-			return nil, api.StatusBadRequest("Enrollment request is already approved")
-		}
-
-		identity, err := authcommon.GetIdentity(ctx)
-		if err != nil {
-			return nil, api.StatusInternalServerError(fmt.Sprintf("failed to retrieve user identity while approving enrollment request: %v", err))
-		}
-
-		approvedBy := "unknown"
-		if identity != nil && len(identity.Username) > 0 {
-			approvedBy = identity.Username
-		}
-
-		approvalStatus := api.EnrollmentRequestApprovalStatus{
-			Approved:   approval.Approved,
-			Labels:     approval.Labels,
-			ApprovedAt: time.Now(),
-			ApprovedBy: approvedBy,
-		}
-		approvalStatusToReturn = &approvalStatus
-
-		if err := approveAndSignEnrollmentRequest(h.ca, enrollmentReq, &approvalStatus); err != nil {
-			return nil, api.StatusBadRequest(fmt.Sprintf("Error approving and signing enrollment request: %v", err.Error()))
-		}
-
-		// in case of error we return 500 as it will be caused by creating device in db and not by problem with enrollment request
-		if err := h.createDeviceFromEnrollmentRequest(ctx, orgId, enrollmentReq); err != nil {
-			return nil, api.StatusInternalServerError(fmt.Sprintf("error creating device from enrollment request: %v", err))
-		}
+	// If the user isn't approving the ER then there's nothing to do now
+	if !approval.Approved {
+		return approvalStatusToReturn, api.StatusOK()
 	}
+
+	// if the enrollment request was already approved we should not try to approve it one more time
+	if api.IsStatusConditionTrue(enrollmentReq.Status.Conditions, api.ConditionTypeEnrollmentRequestApproved) {
+		return nil, api.StatusBadRequest("Enrollment request is already approved")
+	}
+
+	identity, err := authcommon.GetIdentity(ctx)
+	if err != nil {
+		return nil, api.StatusInternalServerError(fmt.Sprintf("failed to retrieve user identity while approving enrollment request: %v", err))
+	}
+
+	approvedBy := "unknown"
+	if identity != nil && len(identity.Username) > 0 {
+		approvedBy = identity.Username
+	}
+
+	approvalStatus := api.EnrollmentRequestApprovalStatus{
+		Approved:   approval.Approved,
+		Labels:     approval.Labels,
+		ApprovedAt: time.Now(),
+		ApprovedBy: approvedBy,
+	}
+	approvalStatusToReturn = &approvalStatus
+
+	if err := approveAndSignEnrollmentRequest(h.ca, enrollmentReq, &approvalStatus); err != nil {
+		return nil, api.StatusBadRequest(fmt.Sprintf("Error approving and signing enrollment request: %v", err.Error()))
+	}
+
+	// in case of error we return 500 as it will be caused by creating device in db and not by problem with enrollment request
+	if err := h.createDeviceFromEnrollmentRequest(ctx, orgId, enrollmentReq); err != nil {
+		return nil, api.StatusInternalServerError(fmt.Sprintf("error creating device from enrollment request: %v", err))
+	}
+
 	_, err = h.store.EnrollmentRequest().UpdateStatus(ctx, orgId, enrollmentReq)
-	return approvalStatusToReturn, StoreErrorToApiStatus(err, false, api.EnrollmentRequestKind, &name)
+	status := StoreErrorToApiStatus(err, false, api.EnrollmentRequestKind, &name)
+	EmitEnrollmentRequestApprovedEvent(ctx, h.store.Event(), h.log, orgId, status, name, api.ResourceKindEnrollmentRequest)
+	return approvalStatusToReturn, status
 }
 
 func (h *ServiceHandler) ReplaceEnrollmentRequestStatus(ctx context.Context, name string, er api.EnrollmentRequest) (*api.EnrollmentRequest, api.Status) {

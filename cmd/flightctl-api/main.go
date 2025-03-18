@@ -16,6 +16,7 @@ import (
 	"github.com/flightctl/flightctl/internal/config"
 	"github.com/flightctl/flightctl/internal/crypto"
 	"github.com/flightctl/flightctl/internal/instrumentation"
+	"github.com/flightctl/flightctl/internal/service"
 	"github.com/flightctl/flightctl/internal/store"
 	"github.com/flightctl/flightctl/pkg/log"
 	"github.com/flightctl/flightctl/pkg/queues"
@@ -130,6 +131,7 @@ func main() {
 	}
 
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGHUP, syscall.SIGTERM, syscall.SIGQUIT)
+	ctx = context.WithValue(ctx, service.InternalRequestCtxKey, false)
 
 	provider, err := queues.NewRedisProvider(ctx, log, cfg.KV.Hostname, cfg.KV.Port, cfg.KV.Password)
 	if err != nil {

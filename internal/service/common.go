@@ -23,6 +23,7 @@ type ctxKey string
 const (
 	MaxRecordsPerListRequest        = 1000
 	InternalRequestCtxKey    ctxKey = "internal_request"
+	EventSourceCtxKey        ctxKey = "event_source"
 	DelayDeviceRenderCtxKey  ctxKey = "delayDeviceRender"
 )
 

@@ -6,6 +6,7 @@ import (
 	"os/signal"
 	"syscall"
 
+	api "github.com/flightctl/flightctl/api/v1alpha1"
 	"github.com/flightctl/flightctl/internal/config"
 	"github.com/flightctl/flightctl/internal/service"
 	"github.com/flightctl/flightctl/internal/store"
@@ -44,6 +45,7 @@ func main() {
 
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGHUP, syscall.SIGTERM, syscall.SIGQUIT)
 	ctx = context.WithValue(ctx, service.InternalRequestCtxKey, true)
+	ctx = context.WithValue(ctx, service.EventSourceCtxKey, string(api.ServiceTask))
 
 	provider, err := queues.NewRedisProvider(ctx, log, cfg.KV.Hostname, cfg.KV.Port, cfg.KV.Password)
 	if err != nil {

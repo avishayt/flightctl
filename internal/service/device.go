@@ -39,7 +39,10 @@ func (h *ServiceHandler) CreateDevice(ctx context.Context, device api.Device) (*
 
 	result, err := h.store.Device().Create(ctx, orgId, &device, h.callbackManager.DeviceUpdatedCallback)
 	status := StoreErrorToApiStatus(err, true, api.DeviceKind, device.Metadata.Name)
-	EmitResourceUpdatedEvent(ctx, h.store.Event(), h.log, orgId, status, *device.Metadata.Name, api.ResourceKindDevice, nil)
+	event := GetResourceUpdatedEvent(ctx, h.store.Event(), h.log, orgId, status, *device.Metadata.Name, api.ResourceKindDevice, nil)
+	if event != nil {
+		h.CreateEvent(ctx, *event)
+	}
 	return result, status
 }
 
@@ -179,7 +182,10 @@ func (h *ServiceHandler) ReplaceDevice(ctx context.Context, name string, device 
 
 	result, created, details, err := h.store.Device().CreateOrUpdate(ctx, orgId, &device, fieldsToUnset, !IsInternalRequest(ctx), DeviceVerificationCallback, callback)
 	status := StoreErrorToApiStatus(err, created, api.DeviceKind, &name)
-	EmitResourceUpdatedEvent(ctx, h.store.Event(), h.log, orgId, status, *device.Metadata.Name, api.ResourceKindDevice, &details)
+	event := GetResourceUpdatedEvent(ctx, h.store.Event(), h.log, orgId, status, *device.Metadata.Name, api.ResourceKindDevice, &details)
+	if event != nil {
+		h.CreateEvent(ctx, *event)
+	}
 	return result, status
 }
 
@@ -188,7 +194,10 @@ func (h *ServiceHandler) DeleteDevice(ctx context.Context, name string) api.Stat
 
 	err := h.store.Device().Delete(ctx, orgId, name, h.callbackManager.DeviceUpdatedCallback)
 	status := StoreErrorToApiStatus(err, false, api.DeviceKind, &name)
-	EmitResourceDeletedEvent(ctx, h.store.Event(), h.log, orgId, status, name, api.ResourceKindDevice)
+	event := GetResourceDeletedEvent(ctx, h.store.Event(), h.log, orgId, status, name, api.ResourceKindDevice)
+	if event != nil {
+		h.CreateEvent(ctx, *event)
+	}
 	return status
 }
 
@@ -292,7 +301,10 @@ func (h *ServiceHandler) PatchDevice(ctx context.Context, name string, patch api
 
 	result, details, err := h.store.Device().Update(ctx, orgId, newObj, nil, true, DeviceVerificationCallback, updateCallback)
 	status := StoreErrorToApiStatus(err, false, api.DeviceKind, &name)
-	EmitResourceUpdatedEvent(ctx, h.store.Event(), h.log, orgId, status, *newObj.Metadata.Name, api.ResourceKindDevice, &details)
+	event := GetResourceUpdatedEvent(ctx, h.store.Event(), h.log, orgId, status, *newObj.Metadata.Name, api.ResourceKindDevice, &details)
+	if event != nil {
+		h.CreateEvent(ctx, *event)
+	}
 	return result, status
 }
 
@@ -323,7 +335,10 @@ func (h *ServiceHandler) DecommissionDevice(ctx context.Context, name string, de
 	// set the fromAPI bool to 'false', otherwise updating the spec.decommissionRequested of a device is blocked
 	result, _, err := h.store.Device().Update(ctx, orgId, deviceObj, []string{"status", "owner"}, false, DeviceVerificationCallback, updateCallback)
 	status := StoreErrorToApiStatus(err, false, api.DeviceKind, &name)
-	EmitDeviceDecommissionedEvent(ctx, h.store.Event(), h.log, orgId, status, name, api.ResourceKindDevice)
+	event := GetDeviceDecommissionedEvent(ctx, h.store.Event(), h.log, orgId, status, name, api.ResourceKindDevice)
+	if event != nil {
+		h.CreateEvent(ctx, *event)
+	}
 	return result, status
 }
 

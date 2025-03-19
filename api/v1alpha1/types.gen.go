@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/oapi-codegen/runtime"
-	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
 // Defines values for ApplicationStatusType.
@@ -116,9 +115,9 @@ const (
 
 // Defines values for EventSeverity.
 const (
-	Critical EventSeverity = "critical"
-	Info     EventSeverity = "info"
-	Warning  EventSeverity = "warning"
+	EventSeverityCritical EventSeverity = "critical"
+	EventSeverityInfo     EventSeverity = "info"
+	EventSeverityWarning  EventSeverity = "warning"
 )
 
 // Defines values for EventSource.
@@ -140,6 +139,8 @@ const (
 const (
 	EventTypeDeviceDecommissioned      EventType = "DeviceDecommissioned"
 	EventTypeEnrollmentRequestApproved EventType = "EnrollmentRequestApproved"
+	EventTypeRepositoryAccessible      EventType = "RepositoryAccessible"
+	EventTypeRepositoryNotAccessible   EventType = "RepositoryNotAccessible"
 	EventTypeResourceCreated           EventType = "ResourceCreated"
 	EventTypeResourceDeleted           EventType = "ResourceDeleted"
 	EventTypeResourceUpdated           EventType = "ResourceUpdated"
@@ -207,6 +208,13 @@ const (
 // Defines values for RolloutStrategy.
 const (
 	RolloutStrategyBatchSequence RolloutStrategy = "BatchSequence"
+)
+
+// Defines values for ListEventsParamsSeverity.
+const (
+	ListEventsParamsSeverityCritical ListEventsParamsSeverity = "critical"
+	ListEventsParamsSeverityInfo     ListEventsParamsSeverity = "info"
+	ListEventsParamsSeverityWarning  ListEventsParamsSeverity = "warning"
 )
 
 // Defines values for ListLabelsParamsKind.
@@ -821,6 +829,9 @@ type Event struct {
 	// ActorUser User who triggered the event (if applicable).
 	ActorUser *string `json:"actorUser"`
 
+	// ApiVersion APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources.
+	ApiVersion string `json:"apiVersion"`
+
 	// CorrelationId Correlation ID for tracking related events across multiple operations.
 	CorrelationId *string `json:"correlationId"`
 
@@ -828,7 +839,10 @@ type Event struct {
 	Details *EventDetails `json:"details,omitempty"`
 
 	// Id Unique identifier for the event.
-	Id *openapi_types.UUID `json:"id,omitempty"`
+	Id int64 `json:"id"`
+
+	// Kind Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds.
+	Kind string `json:"kind"`
 
 	// Message A human-readable message describing the event.
 	Message string `json:"message"`
@@ -870,6 +884,21 @@ type EventType string
 // EventDetails Event-specific details, structured based on event type.
 type EventDetails struct {
 	union json.RawMessage
+}
+
+// EventList EventList is a list of Events.
+type EventList struct {
+	// ApiVersion APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources.
+	ApiVersion string `json:"apiVersion"`
+
+	// Items List of Events.
+	Items []Event `json:"items"`
+
+	// Kind Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds.
+	Kind string `json:"kind"`
+
+	// Metadata ListMeta describes metadata that synthetic resources must have, including lists and various status objects. A resource may have only one of {ObjectMeta, ListMeta}.
+	Metadata ListMeta `json:"metadata"`
 }
 
 // FileOperation defines model for FileOperation.
@@ -1597,6 +1626,36 @@ type ListEnrollmentRequestsParams struct {
 	// Limit The maximum number of results returned in the list response. The server will set the 'continue' field in the list response if more results exist. The continue value may then be specified as parameter in a subsequent query.
 	Limit *int32 `form:"limit,omitempty" json:"limit,omitempty"`
 }
+
+// ListEventsParams defines parameters for ListEvents.
+type ListEventsParams struct {
+	// Kind Filter by resource type.
+	Kind *ResourceKind `form:"kind,omitempty" json:"kind,omitempty"`
+
+	// Name Filter by resource name.
+	Name *string `form:"name,omitempty" json:"name,omitempty"`
+
+	// CorrelationId Filter by correlation ID (returns related events).
+	CorrelationId *string `form:"correlationId,omitempty" json:"correlationId,omitempty"`
+
+	// Severity Filter by event severity.
+	Severity *ListEventsParamsSeverity `form:"severity,omitempty" json:"severity,omitempty"`
+
+	// StartTime Filter events occurring after this timestamp (ISO 8601, UTC expected).
+	StartTime *time.Time `form:"startTime,omitempty" json:"startTime,omitempty"`
+
+	// EndTime Filter events occurring before this timestamp (ISO 8601, UTC expected).
+	EndTime *time.Time `form:"endTime,omitempty" json:"endTime,omitempty"`
+
+	// Limit The maximum number of events to return in the response.
+	Limit *int32 `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Continue An optional parameter to query more results from the server. The value of the paramter must match the value of the 'continue' field in the previous list response.
+	Continue *string `form:"continue,omitempty" json:"continue,omitempty"`
+}
+
+// ListEventsParamsSeverity defines parameters for ListEvents.
+type ListEventsParamsSeverity string
 
 // ListFleetsParams defines parameters for ListFleets.
 type ListFleetsParams struct {

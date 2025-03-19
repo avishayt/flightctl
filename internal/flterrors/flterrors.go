@@ -36,4 +36,7 @@ var (
 	ErrSignature       = errors.New("signature error")
 	ErrSignCert        = errors.New("error signing certificate")
 	ErrEncodeCert      = errors.New("error encoding certificate")
+
+	// event
+	ErrInvalidContinueToken = errors.New("invalid continue token")
 )

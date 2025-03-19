@@ -138,6 +138,7 @@ func StoreErrorToApiStatus(err error, created bool, kind string, name *string) a
 		flterrors.ErrLabelSelectorParseFailed:      true,
 		flterrors.ErrAnnotationSelectorSyntax:      true,
 		flterrors.ErrAnnotationSelectorParseFailed: true,
+		flterrors.ErrInvalidContinueToken:          true,
 	}
 
 	conflictErrors := map[error]bool{
@@ -180,11 +181,11 @@ func ParseEventSource(s string) *api.EventSource {
 	}
 }
 
-func getCommonEvent(ctx context.Context, status api.Status, resourceName string, ResourceKind api.ResourceKind) *api.Event {
+func GetCommonEvent(ctx context.Context, status api.Status, resourceName string, ResourceKind api.ResourceKind) *api.Event {
 	event := api.Event{
 		ResourceKind: ResourceKind,
 		ResourceName: resourceName,
-		Severity:     api.Info,
+		Severity:     api.EventSeverityInfo,
 	}
 
 	if status.Code >= 200 && status.Code < 299 {
@@ -225,10 +226,10 @@ func getCommonEvent(ctx context.Context, status api.Status, resourceName string,
 	return &event
 }
 
-func EmitDeviceDecommissionedEvent(ctx context.Context, eventStore store.Event, log logrus.FieldLogger, orgId uuid.UUID, status api.Status, resourceName string, ResourceKind api.ResourceKind) {
-	event := getCommonEvent(ctx, status, resourceName, ResourceKind)
+func GetDeviceDecommissionedEvent(ctx context.Context, eventStore store.Event, log logrus.FieldLogger, orgId uuid.UUID, status api.Status, resourceName string, ResourceKind api.ResourceKind) *api.Event {
+	event := GetCommonEvent(ctx, status, resourceName, ResourceKind)
 	if event == nil {
-		return
+		return nil
 	}
 	event.Type = api.EventTypeDeviceDecommissioned
 	if status.Code == http.StatusOK {
@@ -236,17 +237,13 @@ func EmitDeviceDecommissionedEvent(ctx context.Context, eventStore store.Event, 
 	} else {
 		event.Message = status.Message
 	}
-	err := eventStore.Create(ctx, orgId, event)
-	if err != nil {
-		log.Errorf("failed emitting device decommissioned event for %s %s/%s: %v", ResourceKind, orgId, resourceName, err)
-		return
-	}
+	return event
 }
 
-func EmitEnrollmentRequestApprovedEvent(ctx context.Context, eventStore store.Event, log logrus.FieldLogger, orgId uuid.UUID, status api.Status, resourceName string, ResourceKind api.ResourceKind) {
-	event := getCommonEvent(ctx, status, resourceName, ResourceKind)
+func GetEnrollmentRequestApprovedEvent(ctx context.Context, eventStore store.Event, log logrus.FieldLogger, orgId uuid.UUID, status api.Status, resourceName string, ResourceKind api.ResourceKind) *api.Event {
+	event := GetCommonEvent(ctx, status, resourceName, ResourceKind)
 	if event == nil {
-		return
+		return nil
 	}
 	event.Type = api.EventTypeEnrollmentRequestApproved
 	if status.Code == http.StatusOK {
@@ -254,17 +251,13 @@ func EmitEnrollmentRequestApprovedEvent(ctx context.Context, eventStore store.Ev
 	} else {
 		event.Message = status.Message
 	}
-	err := eventStore.Create(ctx, orgId, event)
-	if err != nil {
-		log.Errorf("failed emitting enrollment request approved event for %s %s/%s: %v", ResourceKind, orgId, resourceName, err)
-		return
-	}
+	return event
 }
 
-func EmitResourceDeletedEvent(ctx context.Context, eventStore store.Event, log logrus.FieldLogger, orgId uuid.UUID, status api.Status, resourceName string, ResourceKind api.ResourceKind) {
-	event := getCommonEvent(ctx, status, resourceName, ResourceKind)
+func GetResourceDeletedEvent(ctx context.Context, eventStore store.Event, log logrus.FieldLogger, orgId uuid.UUID, status api.Status, resourceName string, ResourceKind api.ResourceKind) *api.Event {
+	event := GetCommonEvent(ctx, status, resourceName, ResourceKind)
 	if event == nil {
-		return
+		return nil
 	}
 	event.Type = api.EventTypeResourceDeleted
 	if status.Code == http.StatusOK {
@@ -272,17 +265,13 @@ func EmitResourceDeletedEvent(ctx context.Context, eventStore store.Event, log l
 	} else {
 		event.Message = status.Message
 	}
-	err := eventStore.Create(ctx, orgId, event)
-	if err != nil {
-		log.Errorf("failed emitting resource updated event for %s %s/%s: %v", ResourceKind, orgId, resourceName, err)
-		return
-	}
+	return event
 }
 
-func EmitResourceUpdatedEvent(ctx context.Context, eventStore store.Event, log logrus.FieldLogger, orgId uuid.UUID, status api.Status, resourceName string, ResourceKind api.ResourceKind, details *api.ResourceUpdatedDetails) {
-	event := getCommonEvent(ctx, status, resourceName, ResourceKind)
+func GetResourceUpdatedEvent(ctx context.Context, eventStore store.Event, log logrus.FieldLogger, orgId uuid.UUID, status api.Status, resourceName string, ResourceKind api.ResourceKind, details *api.ResourceUpdatedDetails) *api.Event {
+	event := GetCommonEvent(ctx, status, resourceName, ResourceKind)
 	if event == nil {
-		return
+		return nil
 	}
 
 	if status.Code == http.StatusOK {
@@ -308,13 +297,9 @@ func EmitResourceUpdatedEvent(ctx context.Context, eventStore store.Event, log l
 		err := event.Details.FromResourceUpdatedDetails(*details)
 		if err != nil {
 			log.Errorf("failed emitting resource updated event for %s %s/%s: %v", ResourceKind, orgId, resourceName, err)
-			return
+			return nil
 		}
 	}
 
-	err := eventStore.Create(ctx, orgId, event)
-	if err != nil {
-		log.Errorf("failed emitting resource updated event for %s %s/%s: %v", ResourceKind, orgId, resourceName, err)
-		return
-	}
+	return nil
 }

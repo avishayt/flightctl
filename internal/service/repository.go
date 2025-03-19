@@ -26,7 +26,10 @@ func (h *ServiceHandler) CreateRepository(ctx context.Context, repo api.Reposito
 
 	result, err := h.store.Repository().Create(ctx, orgId, &repo, h.callbackManager.RepositoryUpdatedCallback)
 	status := StoreErrorToApiStatus(err, true, api.RepositoryKind, repo.Metadata.Name)
-	EmitResourceUpdatedEvent(ctx, h.store.Event(), h.log, orgId, status, *repo.Metadata.Name, api.ResourceKindRepository, nil)
+	event := GetResourceUpdatedEvent(ctx, h.store.Event(), h.log, orgId, status, *repo.Metadata.Name, api.ResourceKindRepository, nil)
+	if event != nil {
+		h.CreateEvent(ctx, *event)
+	}
 	return result, status
 }
 
@@ -111,7 +114,10 @@ func (h *ServiceHandler) ReplaceRepository(ctx context.Context, name string, rep
 
 	result, created, updateDesc, err := h.store.Repository().CreateOrUpdate(ctx, orgId, &repo, h.callbackManager.RepositoryUpdatedCallback)
 	status := StoreErrorToApiStatus(err, created, api.RepositoryKind, &name)
-	EmitResourceUpdatedEvent(ctx, h.store.Event(), h.log, orgId, status, *repo.Metadata.Name, api.ResourceKindRepository, &updateDesc)
+	event := GetResourceUpdatedEvent(ctx, h.store.Event(), h.log, orgId, status, *repo.Metadata.Name, api.ResourceKindRepository, &updateDesc)
+	if event != nil {
+		h.CreateEvent(ctx, *event)
+	}
 	return result, status
 }
 
@@ -120,7 +126,10 @@ func (h *ServiceHandler) DeleteRepository(ctx context.Context, name string) api.
 
 	err := h.store.Repository().Delete(ctx, orgId, name, h.callbackManager.RepositoryUpdatedCallback)
 	status := StoreErrorToApiStatus(err, false, api.RepositoryKind, &name)
-	EmitResourceDeletedEvent(ctx, h.store.Event(), h.log, orgId, status, name, api.ResourceKindRepository)
+	event := GetResourceDeletedEvent(ctx, h.store.Event(), h.log, orgId, status, name, api.ResourceKindRepository)
+	if event != nil {
+		h.CreateEvent(ctx, *event)
+	}
 	return status
 }
 
@@ -165,7 +174,10 @@ func (h *ServiceHandler) PatchRepository(ctx context.Context, name string, patch
 	}
 	result, updateDesc, err := h.store.Repository().Update(ctx, orgId, newObj, updateCallback)
 	status := StoreErrorToApiStatus(err, false, api.RepositoryKind, &name)
-	EmitResourceUpdatedEvent(ctx, h.store.Event(), h.log, orgId, status, *newObj.Metadata.Name, api.ResourceKindRepository, &updateDesc)
+	event := GetResourceUpdatedEvent(ctx, h.store.Event(), h.log, orgId, status, *newObj.Metadata.Name, api.ResourceKindRepository, &updateDesc)
+	if event != nil {
+		h.CreateEvent(ctx, *event)
+	}
 	return result, status
 }
 

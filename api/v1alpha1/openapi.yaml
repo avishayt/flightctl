@@ -3270,6 +3270,90 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Status'
+  /api/v1/events:
+    get:
+      tags:
+        - labels
+      description: |
+        Retrieves a list of events.
+      operationId: listEvents
+      parameters:
+        - name: kind
+          in: query
+          description: Filter by resource type.
+          schema:
+            $ref: "#/components/schemas/ResourceKind"
+        - name: name
+          in: query
+          description: Filter by resource name.
+          schema:
+            type: string
+        - name: correlationId
+          in: query
+          description: Filter by correlation ID (returns related events).
+          schema:
+            type: string
+        - name: severity
+          in: query
+          description: Filter by event severity.
+          schema:
+            type: string
+            enum: [info, warning, critical]
+        - name: startTime
+          in: query
+          description: Filter events occurring after this timestamp (ISO 8601, UTC expected).
+          schema:
+            type: string
+            format: date-time
+        - name: endTime
+          in: query
+          description: Filter events occurring before this timestamp (ISO 8601, UTC expected).
+          schema:
+            type: string
+            format: date-time
+        - name: limit
+          in: query
+          description: The maximum number of events to return in the response.
+          schema:
+            type: integer
+            format: int32
+        - name: continue
+          in: query
+          description: An optional parameter to query more results from the server. The value of the paramter must match the value of the 'continue' field in the previous list response.
+          required: false
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventList'
+        "400":
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        "403":
+          description: Not allowed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        "503":
+          description: ServiceUnavailable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
 components:
   schemas:
     ResourceKind:
@@ -5045,6 +5129,9 @@ components:
     Event:
       type: object
       required:
+        - apiVersion
+        - kind
+        - id
         - type
         - source
         - status
@@ -5054,9 +5141,15 @@ components:
         - resourceKind
         - timestamp
       properties:
-        id:
+        apiVersion:
           type: string
-          format: uuid
+          description: 'APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources.'
+        kind:
+          type: string
+          description: 'Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds.'
+        id:
+          type: integer
+          format: int64
           description: Unique identifier for the event.
         timestamp:
           type: string
@@ -5071,6 +5164,8 @@ components:
           - ResourceDeleted
           - DeviceDecommissioned
           - EnrollmentRequestApproved
+          - RepositoryAccessible
+          - RepositoryNotAccessible
         source:
           type: string
           description: The component or service that generated the event.
@@ -5127,3 +5222,25 @@ components:
             type: string
             enum: [owner, labels, spec]
           description: List of fields that were updated in the resource.
+    EventList:
+      type: object
+      properties:
+        apiVersion:
+          type: string
+          description: 'APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources.'
+        kind:
+          type: string
+          description: 'Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds.'
+        metadata:
+          $ref: '#/components/schemas/ListMeta'
+        items:
+          type: array
+          description: 'List of Events.'
+          items:
+            $ref: '#/components/schemas/Event'
+      required:
+        - apiVersion
+        - kind
+        - metadata
+        - items
+      description: EventList is a list of Events.

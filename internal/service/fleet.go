@@ -30,7 +30,10 @@ func (h *ServiceHandler) CreateFleet(ctx context.Context, fleet api.Fleet) (*api
 
 	result, err := h.store.Fleet().Create(ctx, orgId, &fleet, h.callbackManager.FleetUpdatedCallback)
 	status := StoreErrorToApiStatus(err, true, api.FleetKind, fleet.Metadata.Name)
-	EmitResourceUpdatedEvent(ctx, h.store.Event(), h.log, orgId, status, *fleet.Metadata.Name, api.ResourceKindFleet, nil)
+	event := GetResourceUpdatedEvent(ctx, h.store.Event(), h.log, orgId, status, *fleet.Metadata.Name, api.ResourceKindFleet, nil)
+	if event != nil {
+		h.CreateEvent(ctx, *event)
+	}
 	return result, status
 }
 
@@ -118,7 +121,10 @@ func (h *ServiceHandler) ReplaceFleet(ctx context.Context, name string, fleet ap
 
 	result, created, details, err := h.store.Fleet().CreateOrUpdate(ctx, orgId, &fleet, nil, true, h.callbackManager.FleetUpdatedCallback)
 	status := StoreErrorToApiStatus(err, created, api.FleetKind, &name)
-	EmitResourceUpdatedEvent(ctx, h.store.Event(), h.log, orgId, status, *fleet.Metadata.Name, api.ResourceKindFleet, &details)
+	event := GetResourceUpdatedEvent(ctx, h.store.Event(), h.log, orgId, status, *fleet.Metadata.Name, api.ResourceKindFleet, &details)
+	if event != nil {
+		h.CreateEvent(ctx, *event)
+	}
 	return result, status
 }
 
@@ -136,7 +142,10 @@ func (h *ServiceHandler) DeleteFleet(ctx context.Context, name string) api.Statu
 
 	err = h.store.Fleet().Delete(ctx, orgId, name, h.callbackManager.FleetUpdatedCallback)
 	status := StoreErrorToApiStatus(err, false, api.FleetKind, &name)
-	EmitResourceDeletedEvent(ctx, h.store.Event(), h.log, orgId, status, name, api.ResourceKindFleet)
+	event := GetResourceDeletedEvent(ctx, h.store.Event(), h.log, orgId, status, name, api.ResourceKindFleet)
+	if event != nil {
+		h.CreateEvent(ctx, *event)
+	}
 	return status
 }
 
@@ -195,7 +204,10 @@ func (h *ServiceHandler) PatchFleet(ctx context.Context, name string, patch api.
 	}
 	result, details, err := h.store.Fleet().Update(ctx, orgId, newObj, nil, true, updateCallback)
 	status := StoreErrorToApiStatus(err, false, api.FleetKind, &name)
-	EmitResourceUpdatedEvent(ctx, h.store.Event(), h.log, orgId, status, *newObj.Metadata.Name, api.ResourceKindDevice, &details)
+	event := GetResourceUpdatedEvent(ctx, h.store.Event(), h.log, orgId, status, *newObj.Metadata.Name, api.ResourceKindDevice, &details)
+	if event != nil {
+		h.CreateEvent(ctx, *event)
+	}
 	return result, status
 }
 

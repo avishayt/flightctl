@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"reflect"
 	"time"
 
@@ -98,8 +99,6 @@ func (h *ServiceHandler) createDeviceFromEnrollmentRequest(ctx context.Context, 
 		apiResource.Metadata.Labels = enrollmentRequest.Status.Approval.Labels
 	}
 	_, err := h.store.Device().Create(ctx, orgId, apiResource, h.callbackManager.DeviceUpdatedCallback)
-	retStatus := StoreErrorToApiStatus(err, true, api.DeviceKind, apiResource.Metadata.Name)
-	EmitResourceUpdatedEvent(ctx, h.store.Event(), h.log, orgId, retStatus, *apiResource.Metadata.Name, api.ResourceKindDevice, nil)
 	return err
 }
 
@@ -117,7 +116,10 @@ func (h *ServiceHandler) CreateEnrollmentRequest(ctx context.Context, er api.Enr
 
 	result, err := h.store.EnrollmentRequest().Create(ctx, orgId, &er)
 	status := StoreErrorToApiStatus(err, true, api.EnrollmentRequestKind, er.Metadata.Name)
-	EmitResourceUpdatedEvent(ctx, h.store.Event(), h.log, orgId, status, *er.Metadata.Name, api.ResourceKindEnrollmentRequest, nil)
+	event := GetResourceUpdatedEvent(ctx, h.store.Event(), h.log, orgId, status, *er.Metadata.Name, api.ResourceKindEnrollmentRequest, nil)
+	if event != nil {
+		h.CreateEvent(ctx, *event)
+	}
 	return result, status
 }
 
@@ -200,7 +202,10 @@ func (h *ServiceHandler) ReplaceEnrollmentRequest(ctx context.Context, name stri
 
 	result, created, details, err := h.store.EnrollmentRequest().CreateOrUpdate(ctx, orgId, &er)
 	status := StoreErrorToApiStatus(err, created, api.EnrollmentRequestKind, &name)
-	EmitResourceUpdatedEvent(ctx, h.store.Event(), h.log, orgId, status, *er.Metadata.Name, api.ResourceKindEnrollmentRequest, &details)
+	event := GetResourceUpdatedEvent(ctx, h.store.Event(), h.log, orgId, status, *er.Metadata.Name, api.ResourceKindEnrollmentRequest, &details)
+	if event != nil {
+		h.CreateEvent(ctx, *event)
+	}
 	return result, status
 }
 
@@ -240,7 +245,10 @@ func (h *ServiceHandler) PatchEnrollmentRequest(ctx context.Context, name string
 
 	result, details, err := h.store.EnrollmentRequest().Update(ctx, orgId, newObj)
 	status := StoreErrorToApiStatus(err, false, api.EnrollmentRequestKind, &name)
-	EmitResourceUpdatedEvent(ctx, h.store.Event(), h.log, orgId, status, *newObj.Metadata.Name, api.ResourceKindEnrollmentRequest, &details)
+	event := GetResourceUpdatedEvent(ctx, h.store.Event(), h.log, orgId, status, *newObj.Metadata.Name, api.ResourceKindEnrollmentRequest, &details)
+	if event != nil {
+		h.CreateEvent(ctx, *event)
+	}
 	return result, status
 }
 
@@ -249,7 +257,10 @@ func (h *ServiceHandler) DeleteEnrollmentRequest(ctx context.Context, name strin
 
 	err := h.store.EnrollmentRequest().Delete(ctx, orgId, name)
 	status := StoreErrorToApiStatus(err, false, api.EnrollmentRequestKind, &name)
-	EmitResourceDeletedEvent(ctx, h.store.Event(), h.log, orgId, status, name, api.ResourceKindEnrollmentRequest)
+	event := GetResourceDeletedEvent(ctx, h.store.Event(), h.log, orgId, status, name, api.ResourceKindEnrollmentRequest)
+	if event != nil {
+		h.CreateEvent(ctx, *event)
+	}
 	return status
 }
 
@@ -269,7 +280,10 @@ func (h *ServiceHandler) ApproveEnrollmentRequest(ctx context.Context, name stri
 	enrollmentReq, err := h.store.EnrollmentRequest().Get(ctx, orgId, name)
 	if err != nil {
 		status := StoreErrorToApiStatus(err, false, api.EnrollmentRequestKind, &name)
-		EmitEnrollmentRequestApprovedEvent(ctx, h.store.Event(), h.log, orgId, status, name, api.ResourceKindEnrollmentRequest)
+		event := GetEnrollmentRequestApprovedEvent(ctx, h.store.Event(), h.log, orgId, status, name, api.ResourceKindEnrollmentRequest)
+		if event != nil {
+			h.CreateEvent(ctx, *event)
+		}
 		return nil, StoreErrorToApiStatus(err, false, api.EnrollmentRequestKind, &name)
 	}
 
@@ -314,7 +328,16 @@ func (h *ServiceHandler) ApproveEnrollmentRequest(ctx context.Context, name stri
 
 	_, err = h.store.EnrollmentRequest().UpdateStatus(ctx, orgId, enrollmentReq)
 	status := StoreErrorToApiStatus(err, false, api.EnrollmentRequestKind, &name)
-	EmitEnrollmentRequestApprovedEvent(ctx, h.store.Event(), h.log, orgId, status, name, api.ResourceKindEnrollmentRequest)
+	event := GetEnrollmentRequestApprovedEvent(ctx, h.store.Event(), h.log, orgId, status, name, api.ResourceKindEnrollmentRequest)
+	if event != nil {
+		h.CreateEvent(ctx, *event)
+	}
+	if status.Code == http.StatusOK {
+		event = GetResourceUpdatedEvent(ctx, h.store.Event(), h.log, orgId, api.StatusCreated(), name, api.ResourceKindDevice, nil)
+		if event != nil {
+			h.CreateEvent(ctx, *event)
+		}
+	}
 	return approvalStatusToReturn, status
 }
 

@@ -25,7 +25,10 @@ func (h *ServiceHandler) CreateResourceSync(ctx context.Context, rs api.Resource
 
 	result, err := h.store.ResourceSync().Create(ctx, orgId, &rs)
 	status := StoreErrorToApiStatus(err, true, api.ResourceSyncKind, rs.Metadata.Name)
-	EmitResourceUpdatedEvent(ctx, h.store.Event(), h.log, orgId, status, *rs.Metadata.Name, api.ResourceKindResourceSync, nil)
+	event := GetResourceUpdatedEvent(ctx, h.store.Event(), h.log, orgId, status, *rs.Metadata.Name, api.ResourceKindResourceSync, nil)
+	if event != nil {
+		h.CreateEvent(ctx, *event)
+	}
 	return result, status
 }
 
@@ -109,7 +112,10 @@ func (h *ServiceHandler) ReplaceResourceSync(ctx context.Context, name string, r
 
 	result, created, details, err := h.store.ResourceSync().CreateOrUpdate(ctx, orgId, &rs)
 	status := StoreErrorToApiStatus(err, created, api.ResourceSyncKind, &name)
-	EmitResourceUpdatedEvent(ctx, h.store.Event(), h.log, orgId, status, *rs.Metadata.Name, api.ResourceKindResourceSync, &details)
+	event := GetResourceUpdatedEvent(ctx, h.store.Event(), h.log, orgId, status, *rs.Metadata.Name, api.ResourceKindResourceSync, &details)
+	if event != nil {
+		h.CreateEvent(ctx, *event)
+	}
 	return result, status
 }
 
@@ -117,7 +123,10 @@ func (h *ServiceHandler) DeleteResourceSync(ctx context.Context, name string) ap
 	orgId := store.NullOrgId
 	err := h.store.ResourceSync().Delete(ctx, orgId, name, h.store.Fleet().UnsetOwner)
 	status := StoreErrorToApiStatus(err, false, api.ResourceSyncKind, &name)
-	EmitResourceDeletedEvent(ctx, h.store.Event(), h.log, orgId, status, name, api.ResourceKindResourceSync)
+	event := GetResourceDeletedEvent(ctx, h.store.Event(), h.log, orgId, status, name, api.ResourceKindResourceSync)
+	if event != nil {
+		h.CreateEvent(ctx, *event)
+	}
 	return status
 }
 
@@ -156,7 +165,10 @@ func (h *ServiceHandler) PatchResourceSync(ctx context.Context, name string, pat
 	newObj.Metadata.ResourceVersion = nil
 	result, details, err := h.store.ResourceSync().Update(ctx, orgId, newObj)
 	status := StoreErrorToApiStatus(err, false, api.ResourceSyncKind, &name)
-	EmitResourceUpdatedEvent(ctx, h.store.Event(), h.log, orgId, status, *newObj.Metadata.Name, api.ResourceKindResourceSync, &details)
+	event := GetResourceUpdatedEvent(ctx, h.store.Event(), h.log, orgId, status, *newObj.Metadata.Name, api.ResourceKindResourceSync, &details)
+	if event != nil {
+		h.CreateEvent(ctx, *event)
+	}
 	return result, status
 }
 

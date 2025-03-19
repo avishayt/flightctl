@@ -7,11 +7,11 @@ import (
 	api "github.com/flightctl/flightctl/api/v1alpha1"
 	"github.com/flightctl/flightctl/internal/service"
 	"github.com/flightctl/flightctl/pkg/log"
-	"github.com/flightctl/flightctl/pkg/reqid"
-	"github.com/go-chi/chi/v5/middleware"
+	chi "github.com/go-chi/chi/v5/middleware"
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/config"
 	"github.com/go-git/go-git/v5/storage/memory"
+	uuid "github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 )
 
@@ -33,9 +33,8 @@ func NewRepoTester(log logrus.FieldLogger, serviceHandler *service.ServiceHandle
 }
 
 func (r *RepoTester) TestRepositories() {
-	reqid.OverridePrefix("repotester")
-	requestID := reqid.NextRequestID()
-	ctx := context.WithValue(context.Background(), middleware.RequestIDKey, requestID)
+	ctx := context.WithValue(context.Background(), chi.RequestIDKey, uuid.New().String())
+	ctx = context.WithValue(ctx, service.EventSourceCtxKey, string(api.ServicePeriodic))
 	log := log.WithReqIDFromCtx(ctx, r.log)
 
 	log.Info("Running RepoTester")
@@ -145,5 +144,22 @@ func (r *RepoTester) SetAccessCondition(ctx context.Context, repository *api.Rep
 		return nil
 	}
 	_, status := r.serviceHandler.ReplaceRepositoryStatus(ctx, *repository.Metadata.Name, *repository)
-	return service.ApiStatusToErr(status)
+	updateErr := service.ApiStatusToErr(status)
+	if updateErr != nil {
+		return fmt.Errorf("failed to update repository status: %w", updateErr)
+	}
+
+	event := service.GetCommonEvent(ctx, status, *repository.Metadata.Name, api.ResourceKindRepository)
+	if event == nil {
+		return nil
+	}
+	if err == nil {
+		event.Type = api.EventTypeRepositoryAccessible
+		event.Message = "Repository is accessible"
+	} else {
+		event.Type = api.EventTypeRepositoryNotAccessible
+		event.Message = fmt.Sprintf("Repository is not accessible: %v", err)
+	}
+	r.serviceHandler.CreateEvent(ctx, *event)
+	return nil
 }

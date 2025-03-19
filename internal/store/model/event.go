@@ -2,6 +2,7 @@ package model
 
 import (
 	"encoding/json"
+	"fmt"
 	"time"
 
 	api "github.com/flightctl/flightctl/api/v1alpha1"
@@ -10,7 +11,7 @@ import (
 )
 
 type Event struct {
-	ID            uuid.UUID                    `gorm:"type:uuid;default:gen_random_uuid();primaryKey"`
+	ID            uint64                       `gorm:"primaryKey;autoIncrement"`
 	OrgID         uuid.UUID                    `gorm:"type:uuid;primaryKey;index"`
 	Timestamp     time.Time                    `gorm:"autoCreateTime;index"`
 	EventType     string                       `gorm:"type:varchar(100);index"`
@@ -42,6 +43,7 @@ func NewEventFromApiResource(resource *api.Event) *Event {
 		details = *resource.Details
 	}
 	return &Event{
+		Timestamp:     resource.Timestamp,
 		EventType:     string(resource.Type),
 		Source:        string(resource.Source),
 		ActorUser:     resource.ActorUser,
@@ -54,4 +56,52 @@ func NewEventFromApiResource(resource *api.Event) *Event {
 		ResourceName:  resource.ResourceName,
 		ResourceKind:  string(resource.ResourceKind),
 	}
+}
+
+func EventAPIVersion() string {
+	return fmt.Sprintf("%s/%s", api.APIGroup, api.EventAPIVersion)
+}
+
+func (e *Event) ToApiResource(opts ...APIResourceOption) (*api.Event, error) {
+	if e == nil {
+		return &api.Event{}, nil
+	}
+
+	return &api.Event{
+		ApiVersion:    EventAPIVersion(),
+		Kind:          api.EventKind,
+		Id:            int64(e.ID),
+		Type:          api.EventType(e.EventType),
+		Source:        api.EventSource(e.Source),
+		ActorUser:     e.ActorUser,
+		ActorService:  e.ActorService,
+		Status:        api.EventStatus(e.Status),
+		Severity:      api.EventSeverity(e.Severity),
+		Message:       e.Message,
+		Details:       &e.Details.Data,
+		CorrelationId: e.CorrelationID,
+		ResourceName:  e.ResourceName,
+		ResourceKind:  api.ResourceKind(e.ResourceKind),
+		Timestamp:     e.Timestamp,
+	}, nil
+}
+
+func EventsToApiResource(events []Event, cont *string, numRemaining *int64) (api.EventList, error) {
+	eventList := make([]api.Event, len(events))
+	for i, event := range events {
+		var opts []APIResourceOption
+		apiResource, _ := event.ToApiResource(opts...)
+		eventList[i] = *apiResource
+	}
+	ret := api.EventList{
+		ApiVersion: EventAPIVersion(),
+		Kind:       api.EventListKind,
+		Items:      eventList,
+		Metadata:   api.ListMeta{},
+	}
+	if cont != nil {
+		ret.Metadata.Continue = cont
+		ret.Metadata.RemainingItemCount = numRemaining
+	}
+	return ret, nil
 }

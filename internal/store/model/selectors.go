@@ -9,7 +9,7 @@ import (
 
 // Define additional custom selectors for various resources,
 // including Device, Fleet, EnrollmentRequest, ResourceSync, Repository,
-// and CertificateSigningRequest. Each resource is equipped with a set of selectors
+// CertificateSigningRequest, and Event. Each resource is equipped with a set of selectors
 // that map field paths to their corresponding types.
 type selectorToTypeMap map[selector.SelectorName]selector.SelectorType
 

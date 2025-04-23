@@ -3286,39 +3286,11 @@ paths:
         Retrieves a list of events.
       operationId: listEvents
       parameters:
-        - name: kind
+        - name: fieldSelector
           in: query
-          description: Filter by resource type.
-          schema:
-            $ref: "#/components/schemas/ResourceKind"
-        - name: name
-          in: query
-          description: Filter by resource name.
+          description: A selector to restrict the list of returned objects by their fields, supporting operators like '=', '==', and '!=' (e.g., "key1=value1,key2!=value2").
           schema:
             type: string
-        - name: correlationId
-          in: query
-          description: Filter by correlation ID (returns related events).
-          schema:
-            type: string
-        - name: severity
-          in: query
-          description: Filter by event severity.
-          schema:
-            type: string
-            enum: [info, warning, critical]
-        - name: startTime
-          in: query
-          description: Filter events occurring after this timestamp (ISO 8601, UTC expected).
-          schema:
-            type: string
-            format: date-time
-        - name: endTime
-          in: query
-          description: Filter events occurring before this timestamp (ISO 8601, UTC expected).
-          schema:
-            type: string
-            format: date-time
         - name: limit
           in: query
           description: The maximum number of events to return in the response.
@@ -3328,7 +3300,6 @@ paths:
         - name: continue
           in: query
           description: An optional parameter to query more results from the server. The value of the paramter must match the value of the 'continue' field in the previous list response.
-          required: false
           schema:
             type: string
       responses:
@@ -5192,18 +5163,17 @@ components:
     Event:
       type: object
       required:
-        - kind
         - apiVersion
-        - id
-        - timestamp
+        - kind
+        - metadata
+        - involvedObject
+        - reason
+        - message
         - type
         - source
-        - status
-        - message
+        - actor
         - severity
         - correlationId
-        - resourceName
-        - resourceKind
       properties:
         apiVersion:
           type: string
@@ -5211,17 +5181,13 @@ components:
         kind:
           type: string
           description: 'Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds.'
-        id:
-          type: integer
-          format: uint64
-          description: Unique identifier for the event.
-        timestamp:
+        metadata:
+          $ref: '#/components/schemas/ObjectMeta'
+        involvedObject:
+          $ref: '#/components/schemas/ObjectReference'
+        reason:
           type: string
-          format: date-time
-          description: Timestamp when the event occurred.
-        type:
-          type: string
-          description: Type of event.
+          description: A short, machine-readable string that describes the reason for the event.
           enum:
             - ResourceCreationSucceeded
             - ResourceCreationFailed
@@ -5238,44 +5204,49 @@ components:
             - DeviceDisconnected
             - DeviceReconnected
             - DeviceOnline
-        source:
-          type: string
-          description: The component or service that generated the event.
-          enum:
-            - service-api
-            - service-periodic
-            - service-task
-            - device-agent
-        actorUser:
-          type: string
-          nullable: true
-          description: User who triggered the event (if applicable).
-        actorService:
-          type: string
-          nullable: true
-          description: Automated service or system that triggered the event (if applicable).
-        status:
-          type: string
-          enum: [success, failure, in-progress]
-          description: Current state of the event, indicating whether the action was completed successfully, failed, or is still ongoing.
-        severity:
-          type: string
-          enum: [info, warning, critical]
-          description: The severity level of the event.
         message:
           type: string
-          description: A human-readable message describing the event.
+          description: A human-readable description of the status of this operation.
         details:
           $ref: '#/components/schemas/EventDetails'
+        type:
+          type: string
+          description: The type of the event. One of Normal, Warning.
+          enum:
+            - Normal
+            - Warning
+        source:
+          $ref: '#/components/schemas/EventSource'
+        actor:
+          type: string
+          description: 'The name of the user or service that triggered the event. The value will be prefixed by either user: (for human users) or service: (for automated services).'
         correlationId:
           type: string
-          nullable: true
-          description: Correlation ID for tracking related events across multiple operations.
-        resourceName:
+          description: 'A unique identifier that links related events together, enabling traceability across multiple event occurrences in a single workflow.'
+        parentCorrelationId:
           type: string
-          description: Unique identifier of the resource associated with the event.
-        resourceKind:
-          $ref: '#/components/schemas/ResourceKind'
+          description: 'When events are part of a larger workflow, this field references the correlationId of the parent event.'
+    EventSource:
+      type: object
+      description: The component that is responsible for the event.
+      required:
+        - component
+      properties:
+        component:
+          type: string
+          description: The name of the component that is responsible for the event.
+    ObjectReference:
+      type: object
+      required:
+        - kind
+        - name
+      properties:
+        kind:
+          type: string
+          description: 'Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds.'
+        name:
+          type: string
+          description: The name of the referenced object.
     EventList:
       type: object
       properties:

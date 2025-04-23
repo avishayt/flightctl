@@ -137,45 +137,29 @@ const (
 	EncodingPlain  EncodingType = "plain"
 )
 
-// Defines values for EventSeverity.
+// Defines values for EventReason.
 const (
-	EventSeverityCritical EventSeverity = "critical"
-	EventSeverityInfo     EventSeverity = "info"
-	EventSeverityWarning  EventSeverity = "warning"
-)
-
-// Defines values for EventSource.
-const (
-	DeviceAgent     EventSource = "device-agent"
-	ServiceApi      EventSource = "service-api"
-	ServicePeriodic EventSource = "service-periodic"
-	ServiceTask     EventSource = "service-task"
-)
-
-// Defines values for EventStatus.
-const (
-	Failure    EventStatus = "failure"
-	InProgress EventStatus = "in-progress"
-	Success    EventStatus = "success"
+	EventReasonDeviceDecommissioningFailed    EventReason = "DeviceDecommissioningFailed"
+	EventReasonDeviceDecommissioningSucceeded EventReason = "DeviceDecommissioningSucceeded"
+	EventReasonDeviceDisconnected             EventReason = "DeviceDisconnected"
+	EventReasonDeviceOnline                   EventReason = "DeviceOnline"
+	EventReasonDeviceReconnected              EventReason = "DeviceReconnected"
+	EventReasonDeviceThresholdCrossed         EventReason = "DeviceThresholdCrossed"
+	EventReasonEnrollmentRequestApproved      EventReason = "EnrollmentRequestApproved"
+	EventReasonRepositoryAccessible           EventReason = "RepositoryAccessible"
+	EventReasonRepositoryNotAccessible        EventReason = "RepositoryNotAccessible"
+	EventReasonResourceCreationFailed         EventReason = "ResourceCreationFailed"
+	EventReasonResourceCreationSucceeded      EventReason = "ResourceCreationSucceeded"
+	EventReasonResourceDeletionFailed         EventReason = "ResourceDeletionFailed"
+	EventReasonResourceDeletionSucceeded      EventReason = "ResourceDeletionSucceeded"
+	EventReasonResourceUpdateFailed           EventReason = "ResourceUpdateFailed"
+	EventReasonResourceUpdateSucceeded        EventReason = "ResourceUpdateSucceeded"
 )
 
 // Defines values for EventType.
 const (
-	EventTypeDeviceDecommissioningFailed    EventType = "DeviceDecommissioningFailed"
-	EventTypeDeviceDecommissioningSucceeded EventType = "DeviceDecommissioningSucceeded"
-	EventTypeDeviceDisconnected             EventType = "DeviceDisconnected"
-	EventTypeDeviceOnline                   EventType = "DeviceOnline"
-	EventTypeDeviceReconnected              EventType = "DeviceReconnected"
-	EventTypeDeviceThresholdCrossed         EventType = "DeviceThresholdCrossed"
-	EventTypeEnrollmentRequestApproved      EventType = "EnrollmentRequestApproved"
-	EventTypeRepositoryAccessible           EventType = "RepositoryAccessible"
-	EventTypeRepositoryNotAccessible        EventType = "RepositoryNotAccessible"
-	EventTypeResourceCreationFailed         EventType = "ResourceCreationFailed"
-	EventTypeResourceCreationSucceeded      EventType = "ResourceCreationSucceeded"
-	EventTypeResourceDeletionFailed         EventType = "ResourceDeletionFailed"
-	EventTypeResourceDeletionSucceeded      EventType = "ResourceDeletionSucceeded"
-	EventTypeResourceUpdateFailed           EventType = "ResourceUpdateFailed"
-	EventTypeResourceUpdateSucceeded        EventType = "ResourceUpdateSucceeded"
+	EventTypeNormal  EventType = "Normal"
+	EventTypeWarning EventType = "Warning"
 )
 
 // Defines values for FileOperation.
@@ -234,13 +218,6 @@ const (
 // Defines values for RolloutStrategy.
 const (
 	RolloutStrategyBatchSequence RolloutStrategy = "BatchSequence"
-)
-
-// Defines values for ListEventsParamsSeverity.
-const (
-	Critical ListEventsParamsSeverity = "critical"
-	Info     ListEventsParamsSeverity = "info"
-	Warning  ListEventsParamsSeverity = "warning"
 )
 
 // Defines values for ListLabelsParamsKind.
@@ -903,62 +880,45 @@ type EnrollmentServiceService struct {
 
 // Event defines model for Event.
 type Event struct {
-	// ActorService Automated service or system that triggered the event (if applicable).
-	ActorService *string `json:"actorService"`
-
-	// ActorUser User who triggered the event (if applicable).
-	ActorUser *string `json:"actorUser"`
+	// Actor The name of the user or service that triggered the event. The value will be prefixed by either user: (for human users) or service: (for automated services).
+	Actor string `json:"actor"`
 
 	// ApiVersion APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources.
 	ApiVersion string `json:"apiVersion"`
 
-	// CorrelationId Correlation ID for tracking related events across multiple operations.
-	CorrelationId *string `json:"correlationId"`
+	// CorrelationId A unique identifier that links related events together, enabling traceability across multiple event occurrences in a single workflow.
+	CorrelationId string `json:"correlationId"`
 
 	// Details Event-specific details, structured based on event type.
-	Details *EventDetails `json:"details,omitempty"`
-
-	// Id Unique identifier for the event.
-	Id uint64 `json:"id"`
+	Details        *EventDetails   `json:"details,omitempty"`
+	InvolvedObject ObjectReference `json:"involvedObject"`
 
 	// Kind Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds.
 	Kind string `json:"kind"`
 
-	// Message A human-readable message describing the event.
+	// Message A human-readable description of the status of this operation.
 	Message string `json:"message"`
 
-	// ResourceKind Resource types exposed via the API.
-	ResourceKind ResourceKind `json:"resourceKind"`
+	// Metadata ObjectMeta is metadata that all persisted resources must have, which includes all objects users must create.
+	Metadata ObjectMeta `json:"metadata"`
 
-	// ResourceName Unique identifier of the resource associated with the event.
-	ResourceName string `json:"resourceName"`
+	// ParentCorrelationId When events are part of a larger workflow, this field references the correlationId of the parent event.
+	ParentCorrelationId *string `json:"parentCorrelationId,omitempty"`
 
-	// Severity The severity level of the event.
-	Severity EventSeverity `json:"severity"`
+	// Reason A short, machine-readable string that describes the reason for the event.
+	Reason EventReason `json:"reason"`
 
-	// Source The component or service that generated the event.
+	// Source The component that is responsible for the event.
 	Source EventSource `json:"source"`
 
-	// Status Current state of the event, indicating whether the action was completed successfully, failed, or is still ongoing.
-	Status EventStatus `json:"status"`
-
-	// Timestamp Timestamp when the event occurred.
-	Timestamp time.Time `json:"timestamp"`
-
-	// Type Type of event.
+	// Type The type of the event. One of Normal, Warning.
 	Type EventType `json:"type"`
 }
 
-// EventSeverity The severity level of the event.
-type EventSeverity string
+// EventReason A short, machine-readable string that describes the reason for the event.
+type EventReason string
 
-// EventSource The component or service that generated the event.
-type EventSource string
-
-// EventStatus Current state of the event, indicating whether the action was completed successfully, failed, or is still ongoing.
-type EventStatus string
-
-// EventType Type of event.
+// EventType The type of the event. One of Normal, Warning.
 type EventType string
 
 // EventDetails Event-specific details, structured based on event type.
@@ -979,6 +939,12 @@ type EventList struct {
 
 	// Metadata ListMeta describes metadata that synthetic resources must have, including lists and various status objects. A resource may have only one of {ObjectMeta, ListMeta}.
 	Metadata ListMeta `json:"metadata"`
+}
+
+// EventSource The component that is responsible for the event.
+type EventSource struct {
+	// Component The name of the component that is responsible for the event.
+	Component string `json:"component"`
 }
 
 // FileContent The content of a file.
@@ -1327,6 +1293,15 @@ type ObjectMeta struct {
 
 	// ResourceVersion An opaque string that identifies the server's internal version of an object.
 	ResourceVersion *string `json:"resourceVersion,omitempty"`
+}
+
+// ObjectReference defines model for ObjectReference.
+type ObjectReference struct {
+	// Kind Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds.
+	Kind string `json:"kind"`
+
+	// Name The name of the referenced object.
+	Name string `json:"name"`
 }
 
 // PatchRequest defines model for PatchRequest.
@@ -1745,23 +1720,8 @@ type ListEnrollmentRequestsParams struct {
 
 // ListEventsParams defines parameters for ListEvents.
 type ListEventsParams struct {
-	// Kind Filter by resource type.
-	Kind *ResourceKind `form:"kind,omitempty" json:"kind,omitempty"`
-
-	// Name Filter by resource name.
-	Name *string `form:"name,omitempty" json:"name,omitempty"`
-
-	// CorrelationId Filter by correlation ID (returns related events).
-	CorrelationId *string `form:"correlationId,omitempty" json:"correlationId,omitempty"`
-
-	// Severity Filter by event severity.
-	Severity *ListEventsParamsSeverity `form:"severity,omitempty" json:"severity,omitempty"`
-
-	// StartTime Filter events occurring after this timestamp (ISO 8601, UTC expected).
-	StartTime *time.Time `form:"startTime,omitempty" json:"startTime,omitempty"`
-
-	// EndTime Filter events occurring before this timestamp (ISO 8601, UTC expected).
-	EndTime *time.Time `form:"endTime,omitempty" json:"endTime,omitempty"`
+	// FieldSelector A selector to restrict the list of returned objects by their fields, supporting operators like '=', '==', and '!=' (e.g., "key1=value1,key2!=value2").
+	FieldSelector *string `form:"fieldSelector,omitempty" json:"fieldSelector,omitempty"`
 
 	// Limit The maximum number of events to return in the response.
 	Limit *int32 `form:"limit,omitempty" json:"limit,omitempty"`
@@ -1769,9 +1729,6 @@ type ListEventsParams struct {
 	// Continue An optional parameter to query more results from the server. The value of the paramter must match the value of the 'continue' field in the previous list response.
 	Continue *string `form:"continue,omitempty" json:"continue,omitempty"`
 }
-
-// ListEventsParamsSeverity defines parameters for ListEvents.
-type ListEventsParamsSeverity string
 
 // ListFleetsParams defines parameters for ListFleets.
 type ListFleetsParams struct {

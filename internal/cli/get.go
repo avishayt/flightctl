@@ -247,8 +247,9 @@ func (o *GetOptions) Run(ctx context.Context, args []string) error { //nolint:go
 		response, err = c.ListCertificateSigningRequestsWithResponse(ctx, &params)
 	case kind == EventKind:
 		params := api.ListEventsParams{
-			Limit:    util.ToPtrWithNilDefault(o.Limit),
-			Continue: util.ToPtrWithNilDefault(o.Continue),
+			FieldSelector: util.ToPtrWithNilDefault(o.FieldSelector),
+			Limit:         util.ToPtrWithNilDefault(o.Limit),
+			Continue:      util.ToPtrWithNilDefault(o.Continue),
 		}
 		response, err = c.ListEventsWithResponse(ctx, &params)
 	default:
@@ -583,13 +584,13 @@ func (o *GetOptions) printCSRTable(w *tabwriter.Writer, csrs ...api.CertificateS
 }
 
 func (o *GetOptions) printEventsTable(w *tabwriter.Writer, events ...api.Event) {
-	fmt.Fprintln(w, "TIMESTAMP\tKIND\tNAME\tSEVERITY\tMESSAGE")
+	fmt.Fprintln(w, "AGE\tKIND\tNAME\tTYPE\tMESSAGE")
 	for _, e := range events {
 		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n",
-			e.Timestamp.Format(time.RFC3339),
-			e.ResourceKind,
-			e.ResourceName,
-			e.Severity,
+			humanize.Time(*e.Metadata.CreationTimestamp),
+			e.InvolvedObject.Kind,
+			e.InvolvedObject.Name,
+			e.Type,
 			e.Message,
 		)
 	}

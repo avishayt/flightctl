@@ -3,13 +3,12 @@ package service
 import (
 	"context"
 	"fmt"
-	"strconv"
 	"time"
 
 	api "github.com/flightctl/flightctl/api/v1alpha1"
 	"github.com/flightctl/flightctl/internal/store"
+	"github.com/flightctl/flightctl/internal/store/selector"
 	"github.com/go-openapi/swag"
-	"github.com/samber/lo"
 )
 
 func (h *ServiceHandler) CreateEvent(ctx context.Context, event api.Event) {
@@ -17,21 +16,30 @@ func (h *ServiceHandler) CreateEvent(ctx context.Context, event api.Event) {
 
 	err := h.store.Event().Create(ctx, orgId, &event)
 	if err != nil {
-		h.log.Errorf("failed emitting resource updated event for %s %s/%s: %v", event.ResourceKind, orgId, event.ResourceName, err)
+		h.log.Errorf("failed emitting resource updated %s event for %s %s/%s: %v", event.Reason, event.InvolvedObject.Kind, orgId, event.InvolvedObject.Name, err)
 	}
 }
 
 func (h *ServiceHandler) ListEvents(ctx context.Context, params api.ListEventsParams) (*api.EventList, api.Status) {
 	orgId := store.NullOrgId
 
-	listParams := store.ListEventsParams{
-		Name:          params.Name,
-		CorrelationId: params.CorrelationId,
-		StartTime:     params.StartTime,
-		EndTime:       params.EndTime,
-		Limit:         int(swag.Int32Value(params.Limit)),
+	cont, err := store.ParseContinueString(params.Continue)
+	if err != nil {
+		return nil, api.StatusBadRequest(fmt.Sprintf("failed to parse continue parameter: %v", err))
 	}
 
+	var fieldSelector *selector.FieldSelector
+	if params.FieldSelector != nil {
+		if fieldSelector, err = selector.NewFieldSelector(*params.FieldSelector); err != nil {
+			return nil, api.StatusBadRequest(fmt.Sprintf("failed to parse field selector: %v", err))
+		}
+	}
+
+	listParams := store.ListParams{
+		Limit:         int(swag.Int32Value(params.Limit)),
+		Continue:      cont,
+		FieldSelector: fieldSelector,
+	}
 	if listParams.Limit == 0 {
 		listParams.Limit = MaxRecordsPerListRequest
 	} else if listParams.Limit > MaxRecordsPerListRequest {
@@ -40,24 +48,19 @@ func (h *ServiceHandler) ListEvents(ctx context.Context, params api.ListEventsPa
 		return nil, api.StatusBadRequest("limit cannot be negative")
 	}
 
-	if params.Kind != nil {
-		listParams.Kind = lo.ToPtr(string(*params.Kind))
-	}
-
-	if params.Severity != nil {
-		listParams.Severity = lo.ToPtr(string(*params.Severity))
-	}
-
-	if params.Continue != nil {
-		continueInt, err := strconv.ParseUint(*params.Continue, 10, 64)
-		if err != nil {
-			return nil, api.StatusBadRequest(fmt.Sprintf("failed to parse continue parameter: %v", err))
-		}
-		listParams.Continue = &continueInt
-	}
-
 	result, err := h.store.Event().List(ctx, orgId, listParams)
-	return result, StoreErrorToApiStatus(err, false, api.EventKind, nil)
+	if err == nil {
+		return result, api.StatusOK()
+	}
+
+	var se *selector.SelectorError
+
+	switch {
+	case selector.AsSelectorError(err, &se):
+		return nil, api.StatusBadRequest(se.Error())
+	default:
+		return nil, api.StatusInternalServerError(err.Error())
+	}
 }
 
 func (h *ServiceHandler) DeleteEventsOlderThan(ctx context.Context, cutoffTime time.Time) (int64, api.Status) {

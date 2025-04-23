@@ -1479,51 +1479,11 @@ func (siw *ServerInterfaceWrapper) ListEvents(w http.ResponseWriter, r *http.Req
 	// Parameter object where we will unmarshal all parameters from the context
 	var params ListEventsParams
 
-	// ------------- Optional query parameter "kind" -------------
+	// ------------- Optional query parameter "fieldSelector" -------------
 
-	err = runtime.BindQueryParameter("form", true, false, "kind", r.URL.Query(), &params.Kind)
+	err = runtime.BindQueryParameter("form", true, false, "fieldSelector", r.URL.Query(), &params.FieldSelector)
 	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "kind", Err: err})
-		return
-	}
-
-	// ------------- Optional query parameter "name" -------------
-
-	err = runtime.BindQueryParameter("form", true, false, "name", r.URL.Query(), &params.Name)
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "name", Err: err})
-		return
-	}
-
-	// ------------- Optional query parameter "correlationId" -------------
-
-	err = runtime.BindQueryParameter("form", true, false, "correlationId", r.URL.Query(), &params.CorrelationId)
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "correlationId", Err: err})
-		return
-	}
-
-	// ------------- Optional query parameter "severity" -------------
-
-	err = runtime.BindQueryParameter("form", true, false, "severity", r.URL.Query(), &params.Severity)
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "severity", Err: err})
-		return
-	}
-
-	// ------------- Optional query parameter "startTime" -------------
-
-	err = runtime.BindQueryParameter("form", true, false, "startTime", r.URL.Query(), &params.StartTime)
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "startTime", Err: err})
-		return
-	}
-
-	// ------------- Optional query parameter "endTime" -------------
-
-	err = runtime.BindQueryParameter("form", true, false, "endTime", r.URL.Query(), &params.EndTime)
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "endTime", Err: err})
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "fieldSelector", Err: err})
 		return
 	}
 

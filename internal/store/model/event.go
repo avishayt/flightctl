@@ -3,30 +3,23 @@ package model
 import (
 	"encoding/json"
 	"fmt"
-	"time"
 
 	api "github.com/flightctl/flightctl/api/v1alpha1"
-	"github.com/google/uuid"
-	"gorm.io/gorm"
+	"github.com/samber/lo"
 )
 
 type Event struct {
-	ID            uint64                       `gorm:"primaryKey;autoIncrement"`
-	OrgID         uuid.UUID                    `gorm:"type:uuid;primaryKey;index"`
-	Timestamp     time.Time                    `gorm:"autoCreateTime"` // No index - BRIN index created in InitialMigration
-	EventType     string                       `gorm:"type:varchar(100);index"`
-	Source        string                       `gorm:"type:varchar(100)"`
-	ActorUser     *string                      `gorm:"type:varchar(100);nullable"`
-	ActorService  *string                      `gorm:"type:varchar(100);nullable"`
-	Status        string                       `gorm:"type:varchar(20);index"`
-	Severity      string                       `gorm:"type:varchar(20);index"`
-	Message       string                       `gorm:"type:text"`
-	Details       *JSONField[api.EventDetails] `gorm:"type:jsonb"`
-	CorrelationID *string                      `gorm:"type:varchar(100);nullable"`
-	ResourceName  string                       `gorm:"index"`
-	ResourceKind  string                       `gorm:"type:varchar(50);index"`
-	CreatedAt     time.Time                    `gorm:"autoCreateTime"`
-	DeletedAt     gorm.DeletedAt               `gorm:"index"`
+	Resource
+	Reason              string                       `gorm:"type:string;index" selector:"reason"`
+	SourceComponent     string                       `gorm:"type:string"`
+	Actor               string                       `gorm:"type:string" selector:"actor"`
+	Type                string                       `gorm:"type:string;index" selector:"type"`
+	Message             string                       `gorm:"type:text"`
+	Details             *JSONField[api.EventDetails] `gorm:"type:jsonb"`
+	CorrelationID       string                       `gorm:"type:string;index" selector:"correlationId"`
+	ParentCorrelationID *string                      `gorm:"type:string;nullable"`
+	InvolvedObjectName  string                       `gorm:"index" selector:"involvedObject.name"`
+	InvolvedObjectKind  string                       `gorm:"type:string;index" selector:"involvedObject.kind"`
 }
 
 func (e Event) String() string {
@@ -34,28 +27,29 @@ func (e Event) String() string {
 	return string(val)
 }
 
-func NewEventFromApiResource(resource *api.Event) *Event {
+func NewEventFromApiResource(resource *api.Event) (*Event, error) {
 	if resource == nil {
-		return &Event{}
+		return &Event{}, nil
 	}
 	details := api.EventDetails{}
 	if resource.Details != nil {
 		details = *resource.Details
 	}
 	return &Event{
-		Timestamp:     resource.Timestamp,
-		EventType:     string(resource.Type),
-		Source:        string(resource.Source),
-		ActorUser:     resource.ActorUser,
-		ActorService:  resource.ActorService,
-		Status:        string(resource.Status),
-		Severity:      string(resource.Severity),
-		Message:       resource.Message,
-		Details:       MakeJSONField(details),
-		CorrelationID: resource.CorrelationId,
-		ResourceName:  resource.ResourceName,
-		ResourceKind:  string(resource.ResourceKind),
-	}
+		Resource: Resource{
+			Name: *resource.Metadata.Name,
+		},
+		Reason:              string(resource.Reason),
+		SourceComponent:     resource.Source.Component,
+		Actor:               resource.Actor,
+		Type:                string(resource.Type),
+		Message:             resource.Message,
+		Details:             MakeJSONField(details),
+		CorrelationID:       resource.CorrelationId,
+		ParentCorrelationID: resource.ParentCorrelationId,
+		InvolvedObjectName:  resource.InvolvedObject.Name,
+		InvolvedObjectKind:  resource.InvolvedObject.Kind,
+	}, nil
 }
 
 func EventAPIVersion() string {
@@ -73,21 +67,25 @@ func (e *Event) ToApiResource(opts ...APIResourceOption) (*api.Event, error) {
 	}
 
 	return &api.Event{
-		ApiVersion:    EventAPIVersion(),
-		Kind:          api.EventKind,
-		Id:            e.ID,
-		Type:          api.EventType(e.EventType),
-		Source:        api.EventSource(e.Source),
-		ActorUser:     e.ActorUser,
-		ActorService:  e.ActorService,
-		Status:        api.EventStatus(e.Status),
-		Severity:      api.EventSeverity(e.Severity),
+		ApiVersion: EventAPIVersion(),
+		Kind:       api.EventKind,
+		Metadata: api.ObjectMeta{
+			Name:              lo.ToPtr(e.Name),
+			CreationTimestamp: lo.ToPtr(e.CreatedAt.UTC()),
+		},
+		InvolvedObject: api.ObjectReference{
+			Kind: e.InvolvedObjectKind,
+			Name: e.InvolvedObjectName,
+		},
+		Reason: api.EventReason(e.Reason),
+		Source: api.EventSource{
+			Component: e.SourceComponent,
+		},
+		Actor:         e.Actor,
+		Type:          api.EventType(e.Type),
 		Message:       e.Message,
 		Details:       details,
 		CorrelationId: e.CorrelationID,
-		ResourceName:  e.ResourceName,
-		ResourceKind:  api.ResourceKind(e.ResourceKind),
-		Timestamp:     e.Timestamp,
 	}, nil
 }
 
@@ -109,4 +107,20 @@ func EventsToApiResource(events []Event, cont *string, numRemaining *int64) (api
 		ret.Metadata.RemainingItemCount = numRemaining
 	}
 	return ret, nil
+}
+
+func (e *Event) GetKind() string {
+	return api.EventKind
+}
+
+func (e *Event) HasNilSpec() bool {
+	return true
+}
+
+func (e *Event) HasSameSpecAs(otherResource any) bool {
+	return true
+}
+
+func (e *Event) GetStatusAsJson() ([]byte, error) {
+	return nil, nil
 }

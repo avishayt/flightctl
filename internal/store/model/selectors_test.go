@@ -41,6 +41,7 @@ func verifySchema(schemaName string, apischema any, selectors selectorToTypeMap)
 		// Normalize the selector name to ensure compatibility with schema definitions.
 		// This is especially important for hidden selectors, which might be annotated differently.
 		s = selector.NewSelectorName(s.String())
+		fmt.Printf("Verifying %v: %v\n", s, schema)
 
 		schemaTyp, exists := schema[s]
 		if !exists {

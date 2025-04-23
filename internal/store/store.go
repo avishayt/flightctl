@@ -4,7 +4,6 @@ import (
 	b64 "encoding/base64"
 	"encoding/json"
 	"fmt"
-	"time"
 
 	"github.com/flightctl/flightctl/internal/store/selector"
 	"github.com/google/uuid"
@@ -52,7 +51,7 @@ func NewStore(db *gorm.DB, log logrus.FieldLogger) Store {
 		templateVersion:           NewTemplateVersion(db, log),
 		repository:                NewRepository(db, log),
 		resourceSync:              NewResourceSync(db, log),
-		event:                     NewEvent(db),
+		event:                     NewEvent(db, log),
 		db:                        db,
 	}
 }
@@ -172,15 +171,4 @@ func ParseContinueString(contStr *string) (*Continue, error) {
 	}
 
 	return &cont, nil
-}
-
-type ListEventsParams struct {
-	Kind          *string
-	Name          *string
-	CorrelationId *string
-	Severity      *string
-	StartTime     *time.Time
-	EndTime       *time.Time
-	Limit         int
-	Continue      *uint64
 }

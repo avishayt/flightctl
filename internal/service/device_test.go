@@ -53,12 +53,12 @@ func (s *DummyDevice) Get(ctx context.Context, orgId uuid.UUID, name string) (*a
 	return nil, flterrors.ErrResourceNotFound
 }
 
-func (s *DummyDevice) Update(ctx context.Context, orgId uuid.UUID, device *api.Device, fieldsToUnset []string, fromAPI bool, validationCallback store.DeviceStoreValidationCallback, callback store.DeviceStoreCallback) (*api.Device, error) {
-	return device, nil
+func (s *DummyDevice) Update(ctx context.Context, orgId uuid.UUID, device *api.Device, fieldsToUnset []string, fromAPI bool, validationCallback store.DeviceStoreValidationCallback, callback store.DeviceStoreCallback) (*api.Device, api.ResourceUpdatedDetails, error) {
+	return device, api.ResourceUpdatedDetails{}, nil
 }
 
-func (s *DummyDevice) CreateOrUpdate(ctx context.Context, orgId uuid.UUID, device *api.Device, fieldsToUnset []string, fromAPI bool, validationCallback store.DeviceStoreValidationCallback, callback store.DeviceStoreCallback) (*api.Device, bool, error) {
-	return device, false, nil
+func (s *DummyDevice) CreateOrUpdate(ctx context.Context, orgId uuid.UUID, device *api.Device, fieldsToUnset []string, fromAPI bool, validationCallback store.DeviceStoreValidationCallback, callback store.DeviceStoreCallback) (*api.Device, bool, api.ResourceUpdatedDetails, error) {
+	return device, false, api.ResourceUpdatedDetails{}, nil
 }
 
 func verifyDevicePatchSucceeded(require *require.Assertions, expectedDevice api.Device, resp *api.Device, status api.Status) {

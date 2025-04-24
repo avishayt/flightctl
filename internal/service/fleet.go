@@ -29,7 +29,9 @@ func (h *ServiceHandler) CreateFleet(ctx context.Context, fleet api.Fleet) (*api
 	}
 
 	result, err := h.store.Fleet().Create(ctx, orgId, &fleet, h.callbackManager.FleetUpdatedCallback)
-	return result, StoreErrorToApiStatus(err, true, api.FleetKind, fleet.Metadata.Name)
+	status := StoreErrorToApiStatus(err, true, api.FleetKind, fleet.Metadata.Name)
+	h.CreateEvent(ctx, GetResourceCreatedEvent(ctx, api.FleetKind, *fleet.Metadata.Name, status))
+	return result, status
 }
 
 func (h *ServiceHandler) ListFleets(ctx context.Context, params api.ListFleetsParams) (*api.FleetList, api.Status) {
@@ -114,8 +116,14 @@ func (h *ServiceHandler) ReplaceFleet(ctx context.Context, name string, fleet ap
 		return nil, api.StatusBadRequest("resource name specified in metadata does not match name in path")
 	}
 
-	result, created, err := h.store.Fleet().CreateOrUpdate(ctx, orgId, &fleet, nil, true, h.callbackManager.FleetUpdatedCallback)
-	return result, StoreErrorToApiStatus(err, created, api.FleetKind, &name)
+	result, created, updateDesc, err := h.store.Fleet().CreateOrUpdate(ctx, orgId, &fleet, nil, true, h.callbackManager.FleetUpdatedCallback)
+	status := StoreErrorToApiStatus(err, created, api.FleetKind, &name)
+	if created {
+		h.CreateEvent(ctx, GetResourceCreatedEvent(ctx, api.FleetKind, name, status))
+	} else {
+		h.CreateEvent(ctx, GetResourceUpdatedEvent(ctx, api.FleetKind, name, status, &updateDesc))
+	}
+	return result, status
 }
 
 func (h *ServiceHandler) DeleteFleet(ctx context.Context, name string) api.Status {
@@ -131,7 +139,9 @@ func (h *ServiceHandler) DeleteFleet(ctx context.Context, name string) api.Statu
 	}
 
 	err = h.store.Fleet().Delete(ctx, orgId, name, h.callbackManager.FleetUpdatedCallback)
-	return StoreErrorToApiStatus(err, false, api.FleetKind, &name)
+	status := StoreErrorToApiStatus(err, false, api.FleetKind, &name)
+	h.CreateEvent(ctx, GetResourceDeletedEvent(ctx, api.FleetKind, name, status))
+	return status
 }
 
 func (h *ServiceHandler) GetFleetStatus(ctx context.Context, name string) (*api.Fleet, api.Status) {
@@ -187,8 +197,10 @@ func (h *ServiceHandler) PatchFleet(ctx context.Context, name string, patch api.
 	if h.callbackManager != nil {
 		updateCallback = h.callbackManager.FleetUpdatedCallback
 	}
-	result, err := h.store.Fleet().Update(ctx, orgId, newObj, nil, true, updateCallback)
-	return result, StoreErrorToApiStatus(err, false, api.FleetKind, &name)
+	result, updateDesc, err := h.store.Fleet().Update(ctx, orgId, newObj, nil, true, updateCallback)
+	status := StoreErrorToApiStatus(err, false, api.FleetKind, &name)
+	h.CreateEvent(ctx, GetResourceUpdatedEvent(ctx, api.FleetKind, name, status, &updateDesc))
+	return result, status
 }
 
 func (h *ServiceHandler) ListFleetRolloutDeviceSelection(ctx context.Context) (*api.FleetList, api.Status) {

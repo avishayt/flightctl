@@ -33,12 +33,12 @@ func (s *DummyResourceSync) Get(ctx context.Context, orgId uuid.UUID, name strin
 	return nil, flterrors.ErrResourceNotFound
 }
 
-func (s *DummyResourceSync) Update(ctx context.Context, orgId uuid.UUID, resourceSync *api.ResourceSync) (*api.ResourceSync, error) {
-	return resourceSync, nil
+func (s *DummyResourceSync) Update(ctx context.Context, orgId uuid.UUID, resourceSync *api.ResourceSync) (*api.ResourceSync, api.ResourceUpdatedDetails, error) {
+	return resourceSync, api.ResourceUpdatedDetails{}, nil
 }
 
-func (s *DummyResourceSync) CreateOrUpdate(ctx context.Context, orgId uuid.UUID, resourceSync *api.ResourceSync) (*api.ResourceSync, bool, error) {
-	return resourceSync, false, nil
+func (s *DummyResourceSync) CreateOrUpdate(ctx context.Context, orgId uuid.UUID, resourceSync *api.ResourceSync) (*api.ResourceSync, bool, api.ResourceUpdatedDetails, error) {
+	return resourceSync, false, api.ResourceUpdatedDetails{}, nil
 }
 
 func verifyRSPatchFailed(require *require.Assertions, status api.Status) {

@@ -143,7 +143,7 @@ func getBaseEvent(ctx context.Context, status api.Status, prefix string, resourc
 
 func GetResourceCreatedEvent(ctx context.Context, resourceKind api.ResourceKind, resourceName string, status api.Status) *api.Event {
 	event := getBaseEvent(ctx, status, "resource-create", resourceKind, resourceName, eventOutcome{
-		Reason:  api.ResourceCreationSucceeded,
+		Reason:  api.ResourceCreated,
 		Message: fmt.Sprintf("%s %s created successfully", resourceKind, resourceName),
 	}, eventOutcome{
 		Reason:  api.ResourceCreationFailed,
@@ -155,7 +155,7 @@ func GetResourceCreatedEvent(ctx context.Context, resourceKind api.ResourceKind,
 
 func GetResourceUpdatedEvent(ctx context.Context, resourceKind api.ResourceKind, resourceName string, status api.Status, updateDesc *api.ResourceUpdatedDetails) *api.Event {
 	event := getBaseEvent(ctx, status, "resource-update", resourceKind, resourceName, eventOutcome{
-		Reason:  api.ResourceUpdateSucceeded,
+		Reason:  api.ResourceUpdated,
 		Message: fmt.Sprintf("%s %s updated successfully", resourceKind, resourceName),
 	}, eventOutcome{
 		Reason:  api.ResourceUpdateFailed,
@@ -179,7 +179,7 @@ func GetResourceUpdatedEvent(ctx context.Context, resourceKind api.ResourceKind,
 
 func GetResourceDeletedEvent(ctx context.Context, resourceKind api.ResourceKind, resourceName string, status api.Status) *api.Event {
 	event := getBaseEvent(ctx, status, "resource-delete", resourceKind, resourceName, eventOutcome{
-		Reason:  api.ResourceDeletionSucceeded,
+		Reason:  api.ResourceDeleted,
 		Message: fmt.Sprintf("%s %s deleted successfully", resourceKind, resourceName),
 	}, eventOutcome{
 		Reason:  api.ResourceDeletionFailed,

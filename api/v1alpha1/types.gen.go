@@ -44,21 +44,21 @@ const (
 
 // Defines values for ConditionType.
 const (
-	CertificateSigningRequestApproved ConditionType = "Approved"
-	CertificateSigningRequestDenied   ConditionType = "Denied"
-	CertificateSigningRequestFailed   ConditionType = "Failed"
-	DeviceDecommissioning             ConditionType = "DeviceDecommissioning"
-	DeviceMultipleOwners              ConditionType = "MultipleOwners"
-	DeviceSpecValid                   ConditionType = "SpecValid"
-	DeviceUpdating                    ConditionType = "Updating"
-	EnrollmentRequestApproved         ConditionType = "Approved"
-	FleetOverlappingSelectors         ConditionType = "OverlappingSelectors"
-	FleetRolloutInProgress            ConditionType = "RolloutInProgress"
-	FleetValid                        ConditionType = "Valid"
-	RepositoryAccessible              ConditionType = "Accessible"
-	ResourceSyncAccessible            ConditionType = "Accessible"
-	ResourceSyncResourceParsed        ConditionType = "ResourceParsed"
-	ResourceSyncSynced                ConditionType = "Synced"
+	ConditionTypeCertificateSigningRequestApproved ConditionType = "Approved"
+	ConditionTypeCertificateSigningRequestDenied   ConditionType = "Denied"
+	ConditionTypeCertificateSigningRequestFailed   ConditionType = "Failed"
+	ConditionTypeDeviceDecommissioning             ConditionType = "DeviceDecommissioning"
+	ConditionTypeDeviceMultipleOwners              ConditionType = "MultipleOwners"
+	ConditionTypeDeviceSpecValid                   ConditionType = "SpecValid"
+	ConditionTypeDeviceUpdating                    ConditionType = "Updating"
+	ConditionTypeEnrollmentRequestApproved         ConditionType = "Approved"
+	ConditionTypeFleetOverlappingSelectors         ConditionType = "OverlappingSelectors"
+	ConditionTypeFleetRolloutInProgress            ConditionType = "RolloutInProgress"
+	ConditionTypeFleetValid                        ConditionType = "Valid"
+	ConditionTypeRepositoryAccessible              ConditionType = "Accessible"
+	ConditionTypeResourceSyncAccessible            ConditionType = "Accessible"
+	ConditionTypeResourceSyncResourceParsed        ConditionType = "ResourceParsed"
+	ConditionTypeResourceSyncSynced                ConditionType = "Synced"
 )
 
 // Defines values for DeviceDecommissionTargetType.
@@ -126,12 +126,19 @@ const (
 
 // Defines values for EventReason.
 const (
-	ResourceCreated        EventReason = "ResourceCreated"
-	ResourceCreationFailed EventReason = "ResourceCreationFailed"
-	ResourceDeleted        EventReason = "ResourceDeleted"
-	ResourceDeletionFailed EventReason = "ResourceDeletionFailed"
-	ResourceUpdateFailed   EventReason = "ResourceUpdateFailed"
-	ResourceUpdated        EventReason = "ResourceUpdated"
+	EventReasonCertificateSigningRequestApproved EventReason = "CertificateSigningRequestApproved"
+	EventReasonCertificateSigningRequestDenied   EventReason = "CertificateSigningRequestDenied"
+	EventReasonCertificateSigningRequestFailed   EventReason = "CertificateSigningRequestFailed"
+	EventReasonDeviceDecommissionFailed          EventReason = "DeviceDecommissionFailed"
+	EventReasonDeviceDecommissioned              EventReason = "DeviceDecommissioned"
+	EventReasonEnrollmentRequestApprovalFailed   EventReason = "EnrollmentRequestApprovalFailed"
+	EventReasonEnrollmentRequestApproved         EventReason = "EnrollmentRequestApproved"
+	EventReasonResourceCreated                   EventReason = "ResourceCreated"
+	EventReasonResourceCreationFailed            EventReason = "ResourceCreationFailed"
+	EventReasonResourceDeleted                   EventReason = "ResourceDeleted"
+	EventReasonResourceDeletionFailed            EventReason = "ResourceDeletionFailed"
+	EventReasonResourceUpdateFailed              EventReason = "ResourceUpdateFailed"
+	EventReasonResourceUpdated                   EventReason = "ResourceUpdated"
 )
 
 // Defines values for EventType.
@@ -469,6 +476,12 @@ type DeviceDecommission struct {
 // DeviceDecommissionTargetType Specifies the desired decommissioning method of the device.
 type DeviceDecommissionTargetType string
 
+// DeviceDecommissioningDetails defines model for DeviceDecommissioningDetails.
+type DeviceDecommissioningDetails struct {
+	// Target Specifies the desired decommissioning method of the device.
+	Target DeviceDecommissionTargetType `json:"target"`
+}
+
 // DeviceIntegrityStatus Summary status of the integrity of the device.
 type DeviceIntegrityStatus struct {
 	// Info Human readable information about the last integrity transition.
@@ -740,6 +753,12 @@ type EnrollmentRequestApproval struct {
 
 	// Labels A set of labels to apply to the device.
 	Labels *map[string]string `json:"labels,omitempty"`
+}
+
+// EnrollmentRequestApprovalDetails defines model for EnrollmentRequestApprovalDetails.
+type EnrollmentRequestApprovalDetails struct {
+	// ApprovedBy The name of the approver.
+	ApprovedBy string `json:"approvedBy"`
 }
 
 // EnrollmentRequestApprovalStatus defines model for EnrollmentRequestApprovalStatus.
@@ -2164,6 +2183,58 @@ func (t *EventDetails) FromResourceUpdatedDetails(v ResourceUpdatedDetails) erro
 
 // MergeResourceUpdatedDetails performs a merge with any union data inside the EventDetails, using the provided ResourceUpdatedDetails
 func (t *EventDetails) MergeResourceUpdatedDetails(v ResourceUpdatedDetails) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsDeviceDecommissioningDetails returns the union data inside the EventDetails as a DeviceDecommissioningDetails
+func (t EventDetails) AsDeviceDecommissioningDetails() (DeviceDecommissioningDetails, error) {
+	var body DeviceDecommissioningDetails
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromDeviceDecommissioningDetails overwrites any union data inside the EventDetails as the provided DeviceDecommissioningDetails
+func (t *EventDetails) FromDeviceDecommissioningDetails(v DeviceDecommissioningDetails) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeDeviceDecommissioningDetails performs a merge with any union data inside the EventDetails, using the provided DeviceDecommissioningDetails
+func (t *EventDetails) MergeDeviceDecommissioningDetails(v DeviceDecommissioningDetails) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsEnrollmentRequestApprovalDetails returns the union data inside the EventDetails as a EnrollmentRequestApprovalDetails
+func (t EventDetails) AsEnrollmentRequestApprovalDetails() (EnrollmentRequestApprovalDetails, error) {
+	var body EnrollmentRequestApprovalDetails
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromEnrollmentRequestApprovalDetails overwrites any union data inside the EventDetails as the provided EnrollmentRequestApprovalDetails
+func (t *EventDetails) FromEnrollmentRequestApprovalDetails(v EnrollmentRequestApprovalDetails) error {
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeEnrollmentRequestApprovalDetails performs a merge with any union data inside the EventDetails, using the provided EnrollmentRequestApprovalDetails
+func (t *EventDetails) MergeEnrollmentRequestApprovalDetails(v EnrollmentRequestApprovalDetails) error {
 	b, err := json.Marshal(v)
 	if err != nil {
 		return err

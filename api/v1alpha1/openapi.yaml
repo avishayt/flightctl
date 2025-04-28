@@ -5205,6 +5205,13 @@ components:
             - ResourceUpdateFailed
             - ResourceDeleted
             - ResourceDeletionFailed
+            - DeviceDecommissioned
+            - DeviceDecommissionFailed
+            - EnrollmentRequestApproved
+            - EnrollmentRequestApprovalFailed
+            - CertificateSigningRequestApproved
+            - CertificateSigningRequestDenied
+            - CertificateSigningRequestFailed
         message:
           type: string
           description: A human-readable description of the status of this operation.
@@ -5270,6 +5277,8 @@ components:
       description: Event-specific details, structured based on event type.
       oneOf:
         - $ref: "#/components/schemas/ResourceUpdatedDetails"
+        - $ref: "#/components/schemas/DeviceDecommissioningDetails"
+        - $ref: "#/components/schemas/EnrollmentRequestApprovalDetails"
     ResourceUpdatedDetails:
       type: object
       required:
@@ -5289,3 +5298,18 @@ components:
           type: string
           nullable: true
           description: The new owner (if applicable).
+    DeviceDecommissioningDetails:
+       type: object
+       required:
+         - target
+       properties:
+         target:
+           $ref: '#/components/schemas/DeviceDecommissionTargetType'
+    EnrollmentRequestApprovalDetails:
+       type: object
+       required:
+         - approvedBy
+       properties:
+         approvedBy:
+           type: string
+           description: The name of the approver.

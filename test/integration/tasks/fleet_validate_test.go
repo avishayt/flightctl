@@ -185,7 +185,7 @@ var _ = Describe("FleetValidate", func() {
 
 			Expect(fleet.Status.Conditions).ToNot(BeNil())
 			Expect(fleet.Status.Conditions).To(HaveLen(1))
-			Expect(fleet.Status.Conditions[0].Type).To(Equal(api.FleetValid))
+			Expect(fleet.Status.Conditions[0].Type).To(Equal(api.ConditionTypeFleetValid))
 			Expect(fleet.Status.Conditions[0].Status).To(Equal(api.ConditionStatusTrue))
 
 			repos, err := storeInst.Fleet().GetRepositoryRefs(ctx, orgId, "myfleet")
@@ -238,7 +238,7 @@ var _ = Describe("FleetValidate", func() {
 
 			Expect(fleet.Status.Conditions).ToNot(BeNil())
 			Expect(fleet.Status.Conditions).To(HaveLen(1))
-			Expect(fleet.Status.Conditions[0].Type).To(Equal(api.FleetValid))
+			Expect(fleet.Status.Conditions[0].Type).To(Equal(api.ConditionTypeFleetValid))
 			Expect(fleet.Status.Conditions[0].Status).To(Equal(api.ConditionStatusFalse))
 
 			repos, err := storeInst.Fleet().GetRepositoryRefs(ctx, orgId, "myfleet")
@@ -289,7 +289,7 @@ var _ = Describe("FleetValidate", func() {
 
 			Expect(fleet.Status.Conditions).ToNot(BeNil())
 			Expect(fleet.Status.Conditions).To(HaveLen(1))
-			Expect(fleet.Status.Conditions[0].Type).To(Equal(api.FleetValid))
+			Expect(fleet.Status.Conditions[0].Type).To(Equal(api.ConditionTypeFleetValid))
 			Expect(fleet.Status.Conditions[0].Status).To(Equal(api.ConditionStatusFalse))
 
 			repos, err := storeInst.Fleet().GetRepositoryRefs(ctx, orgId, "myfleet")
@@ -337,7 +337,7 @@ var _ = Describe("FleetValidate", func() {
 
 			Expect(fleet.Status.Conditions).ToNot(BeNil())
 			Expect(fleet.Status.Conditions).To(HaveLen(1))
-			Expect(fleet.Status.Conditions[0].Type).To(Equal(api.FleetValid))
+			Expect(fleet.Status.Conditions[0].Type).To(Equal(api.ConditionTypeFleetValid))
 			Expect(fleet.Status.Conditions[0].Status).To(Equal(api.ConditionStatusFalse))
 			Expect(fleet.Status.Conditions[0].Message).To(ContainSubstring("failed getting config item as InlineConfigProviderSpec"))
 		})

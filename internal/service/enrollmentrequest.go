@@ -297,7 +297,9 @@ func (h *ServiceHandler) ApproveEnrollmentRequest(ctx context.Context, name stri
 
 		identity, err := authcommon.GetIdentity(ctx)
 		if err != nil {
-			return nil, api.StatusInternalServerError(fmt.Sprintf("failed to retrieve user identity while approving enrollment request: %v", err))
+			status := api.StatusInternalServerError(fmt.Sprintf("failed to retrieve user identity while approving enrollment request: %v", err))
+			h.CreateEvent(ctx, GetEnrollmentRequestApprovedEvent(ctx, name, status, api.EnrollmentRequestApprovalDetails{ApprovedBy: "unknown"}))
+			return nil, status
 		}
 
 		approvedBy := "unknown"
@@ -319,11 +321,15 @@ func (h *ServiceHandler) ApproveEnrollmentRequest(ctx context.Context, name stri
 
 		// in case of error we return 500 as it will be caused by creating device in db and not by problem with enrollment request
 		if err := h.createDeviceFromEnrollmentRequest(ctx, orgId, enrollmentReq); err != nil {
-			return nil, api.StatusInternalServerError(fmt.Sprintf("error creating device from enrollment request: %v", err))
+			status := api.StatusInternalServerError(fmt.Sprintf("error creating device from enrollment request: %v", err))
+			h.CreateEvent(ctx, GetEnrollmentRequestApprovedEvent(ctx, name, status, api.EnrollmentRequestApprovalDetails{ApprovedBy: approvedBy}))
+			return nil, status
 		}
 	}
 	_, err = h.store.EnrollmentRequest().UpdateStatus(ctx, orgId, enrollmentReq)
-	return approvalStatusToReturn, StoreErrorToApiStatus(err, false, api.EnrollmentRequestKind, &name)
+	status := StoreErrorToApiStatus(err, false, api.EnrollmentRequestKind, &name)
+	h.CreateEvent(ctx, GetEnrollmentRequestApprovedEvent(ctx, name, status, api.EnrollmentRequestApprovalDetails{ApprovedBy: approvalStatusToReturn.ApprovedBy}))
+	return approvalStatusToReturn, status
 }
 
 func (h *ServiceHandler) ReplaceEnrollmentRequestStatus(ctx context.Context, name string, er api.EnrollmentRequest) (*api.EnrollmentRequest, api.Status) {

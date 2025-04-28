@@ -188,3 +188,49 @@ func GetResourceDeletedEvent(ctx context.Context, resourceKind api.ResourceKind,
 
 	return event
 }
+
+func GetDeviceDecommissionedEvent(ctx context.Context, deviceName string, status api.Status, details api.DeviceDecommissioningDetails) *api.Event {
+	event := getBaseEvent(ctx, status, "device-decommission", api.DeviceKind, deviceName, eventOutcome{
+		Reason:  api.EventReasonDeviceDecommissioned,
+		Message: fmt.Sprintf("%s decommissioned successfully", deviceName),
+	}, eventOutcome{
+		Reason:  api.EventReasonDeviceDecommissionFailed,
+		Message: fmt.Sprintf("%s decommission failed: %s", deviceName, status.Message),
+	})
+
+	if event == nil {
+		return nil
+	}
+
+	d := api.EventDetails{}
+	err := d.FromDeviceDecommissioningDetails(details)
+	if err != nil {
+		return nil
+	}
+	event.Details = &d
+
+	return event
+}
+
+func GetEnrollmentRequestApprovedEvent(ctx context.Context, enrollmentRequestName string, status api.Status, details api.EnrollmentRequestApprovalDetails) *api.Event {
+	event := getBaseEvent(ctx, status, "enrollment-request-approve", api.EnrollmentRequestKind, enrollmentRequestName, eventOutcome{
+		Reason:  api.EventReasonEnrollmentRequestApproved,
+		Message: fmt.Sprintf("%s approved successfully", enrollmentRequestName),
+	}, eventOutcome{
+		Reason:  api.EventReasonEnrollmentRequestApprovalFailed,
+		Message: fmt.Sprintf("%s approval failed: %s", enrollmentRequestName, status.Message),
+	})
+
+	if event == nil {
+		return nil
+	}
+
+	d := api.EventDetails{}
+	err := d.FromEnrollmentRequestApprovalDetails(details)
+	if err != nil {
+		return nil
+	}
+	event.Details = &d
+
+	return event
+}

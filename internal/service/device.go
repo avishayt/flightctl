@@ -409,7 +409,9 @@ func (h *ServiceHandler) DecommissionDevice(ctx context.Context, name string, de
 
 	// set the fromAPI bool to 'false', otherwise updating the spec.decommissionRequested of a device is blocked
 	result, _, err := h.store.Device().Update(ctx, orgId, deviceObj, []string{"status", "owner"}, false, DeviceVerificationCallback, updateCallback)
-	return result, StoreErrorToApiStatus(err, false, api.DeviceKind, &name)
+	status := StoreErrorToApiStatus(err, false, api.DeviceKind, &name)
+	h.CreateEvent(ctx, GetDeviceDecommissionedEvent(ctx, name, status, api.DeviceDecommissioningDetails{Target: decom.Target}))
+	return result, status
 }
 
 func (h *ServiceHandler) UpdateDeviceAnnotations(ctx context.Context, name string, annotations map[string]string, deleteKeys []string) api.Status {

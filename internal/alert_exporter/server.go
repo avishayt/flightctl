@@ -2,7 +2,6 @@ package alert_exporter
 
 import (
 	"context"
-	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
@@ -67,29 +66,40 @@ func (s *Server) Run() error {
 	callbackManager := tasks_client.NewCallbackManager(publisher, s.log)
 	serviceHandler := service.NewServiceHandler(store, callbackManager, kvStore, nil, s.log, "", "")
 
-	eventPoller := NewEventPoller(s.log, serviceHandler, 30*time.Second)
+	alertExporter := NewAlertExporter(s.log, serviceHandler, s.cfg)
 
-	// Start polling in background
-	go eventPoller.Poll(ctx)
+	// Signal handling
 
-	http.Handle("/metrics", http.HandlerFunc(MetricsHandler))
-	srv := &http.Server{
-		Addr:         ":8000",
-		Handler:      http.DefaultServeMux,
-		ReadTimeout:  5 * time.Second,
-		WriteTimeout: 10 * time.Second,
-		IdleTimeout:  120 * time.Second,
+	go func() {
+		sigCh := make(chan os.Signal, 1)
+		signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+		sig := <-sigCh
+		s.log.Infof("Received signal %s, shutting down", sig)
+		cancel()
+	}()
+
+	backoff := time.Second
+	for {
+		if ctx.Err() != nil {
+			s.log.Info("Context canceled, exiting alert exporter")
+			return nil
+		}
+
+		err := alertExporter.Poll(ctx) // This runs its own ticker with s.interval
+		if err != nil {
+			s.log.Errorf("Poller failed: %v. Restarting after %v...", err, backoff)
+			select {
+			case <-time.After(backoff):
+				backoff *= 2
+				if backoff > 60*time.Second {
+					backoff = 60 * time.Second
+				}
+			case <-ctx.Done():
+				s.log.Info("Context cancelled during backoff, exiting")
+				return nil
+			}
+		} else {
+			backoff = time.Second // Reset if Poll exited cleanly (unusual)
+		}
 	}
-	err = srv.ListenAndServe()
-	if err != nil {
-		s.log.Fatalf("failed to start metrics server: %v", err)
-	}
-	s.log.Info("Metrics server started on :8000/metrics")
-
-	sigShutdown := make(chan os.Signal, 1)
-
-	signal.Notify(sigShutdown, os.Interrupt, syscall.SIGHUP, syscall.SIGTERM, syscall.SIGQUIT)
-	<-sigShutdown
-	s.log.Println("Shutdown signal received")
-	return nil
 }

@@ -33,296 +33,75 @@ package alert_exporter
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"log"
-	"net/http"
-	"strings"
-	"sync/atomic"
 	"time"
 
-	api "github.com/flightctl/flightctl/api/v1alpha1"
+	"github.com/flightctl/flightctl/internal/config"
 	"github.com/flightctl/flightctl/internal/service"
-	"github.com/flightctl/flightctl/internal/store"
-	"github.com/samber/lo"
 	"github.com/sirupsen/logrus"
 )
 
-const AlertCheckpointConsumer = "alert-exporter"
-const AlertCheckpointKey = "active-alerts"
 const CurrentAlertCheckpointVersion = 1
 
 type AlertKey string
 
-type EventPoller struct {
-	log      *logrus.Logger
-	handler  service.Service
-	interval time.Duration
-}
-
-type Alert struct {
-	ResourceOrg  string
-	ResourceKind string
+type AlertInfo struct {
 	ResourceName string
+	ResourceKind string
 	Reason       string
+	StartsAt     time.Time
+	EndsAt       *time.Time
 }
 
 type AlertCheckpoint struct {
 	Version   int
 	LastEvent string
-	Alerts    map[AlertKey]map[string]struct{}
+	Alerts    map[AlertKey]map[string]*AlertInfo
+	Updated   []*AlertInfo
 }
 
-var activeAlerts atomic.Value // stores AlertCheckpoint
-
-func key(a Alert) AlertKey {
-	return AlertKey(fmt.Sprintf("%s:%s:%s", a.ResourceOrg, a.ResourceKind, a.ResourceName))
+func NewAlertKey(org string, kind string, name string) AlertKey {
+	return AlertKey(fmt.Sprintf("%s:%s:%s", org, kind, name))
 }
 
-func AlertFromKey(key AlertKey, reason string) Alert {
-	return Alert{
-		ResourceOrg:  strings.Split(string(key), ":")[0],
-		ResourceKind: strings.Split(string(key), ":")[1],
-		ResourceName: strings.Split(string(key), ":")[2],
-		Reason:       reason,
+type AlertExporter struct {
+	log     *logrus.Logger
+	handler service.Service
+	config  *config.Config
+}
+
+func NewAlertExporter(log *logrus.Logger, handler service.Service, config *config.Config) *AlertExporter {
+	return &AlertExporter{
+		log:     log,
+		handler: handler,
+		config:  config,
 	}
 }
 
-func NewEventPoller(log *logrus.Logger, handler service.Service, interval time.Duration) *EventPoller {
-	return &EventPoller{
-		log:      log,
-		handler:  handler,
-		interval: interval,
-	}
-}
+func (a *AlertExporter) Poll(ctx context.Context) error {
+	checkpointManager := NewCheckpointManager(a.log, a.handler)
+	eventProcessor := NewEventProcessor(a.log, a.handler)
+	alertSender := NewAlertSender(a.log, a.config.Alertmanager.Hostname, uint(a.config.Alertmanager.Port))
+	var err error
 
-func ResetActiveAlerts() {
-	activeAlerts.Store(AlertCheckpoint{Version: CurrentAlertCheckpointVersion, Alerts: make(map[AlertKey]map[string]struct{})})
-}
-
-func (e *EventPoller) Poll(ctx context.Context) {
-	ticker := time.NewTicker(e.interval)
+	ticker := time.NewTicker(time.Duration(a.config.Service.AlertPollingInterval))
 	defer ticker.Stop()
 
-	params := e.GetListEventsParams()
-	e.LoadCheckpoint(ctx)
+	checkpoint := checkpointManager.LoadCheckpoint(ctx)
 
 	for {
 		<-ticker.C
-		tickerCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		tickerCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 
-		e.ProcessLatestEvents(tickerCtx, params)
+		checkpoint, err = eventProcessor.ProcessLatestEvents(tickerCtx, checkpoint)
+		if err != nil {
+			return fmt.Errorf("failed processing events: %v", err)
+		}
+		err = alertSender.SendAlerts(checkpoint)
+		if err != nil {
+			return fmt.Errorf("failed sending alerts: %v", err)
+		}
+
 		cancel()
-	}
-}
-
-// LoadCheckpoint retrieves the last processed event and active alerts from the database.
-// If no checkpoint exists, it initializes a fresh state.
-// If it fails to retrieve the checkpoint or unmarshal the contents, it logs an error and starts
-// from a fresh state. This is better than panicking, as it allows the exporter to continue running
-// and at least report new alerts from the point of failure onward.
-// In the future, we could consider using a more robust error handling strategy, such as listing
-// the system resources and reconstructing the list of active alerts based on the current state
-// of the system. However, for now, I assume that if we fail to fetch the checkpoint then we will
-// also fail to fetch the system resources.
-func (e *EventPoller) LoadCheckpoint(ctx context.Context) {
-	loadedCheckpoint := false
-	previousCheckpoint, status := e.handler.GetCheckpoint(ctx, AlertCheckpointConsumer, AlertCheckpointKey)
-	if status.Code != http.StatusOK {
-		if status.Code == http.StatusNotFound {
-			e.log.Info("No alert checkpoint found")
-		} else {
-			e.log.Errorf("Failed to get alert checkpoint: %v", status.Message)
-		}
-	}
-
-	if status.Code == http.StatusOK && previousCheckpoint != nil {
-		var checkpoint AlertCheckpoint
-		if err := json.Unmarshal(previousCheckpoint, &checkpoint); err != nil {
-			e.log.Errorf("Failed to unmarshal alert checkpoint: %v", err)
-		} else {
-			activeAlerts.Store(checkpoint)
-			loadedCheckpoint = true
-			e.log.Infof("Resuming from last event: %s", checkpoint.LastEvent)
-		}
-	}
-	if !loadedCheckpoint {
-		activeAlerts.Store(AlertCheckpoint{Version: CurrentAlertCheckpointVersion, Alerts: make(map[AlertKey]map[string]struct{})})
-		e.log.Info("Starting with a fresh state")
-	}
-}
-
-func (e *EventPoller) GetListEventsParams() api.ListEventsParams {
-	eventsOfInterest := []api.EventReason{
-		api.DeviceApplicationDegraded,
-		api.DeviceApplicationError,
-		api.DeviceApplicationHealthy,
-		api.DeviceCPUCritical,
-		api.DeviceCPUNormal,
-		api.DeviceCPUWarning,
-		api.DeviceConnected,
-		api.DeviceDisconnected,
-		api.DeviceMemoryCritical,
-		api.DeviceMemoryNormal,
-		api.DeviceMemoryWarning,
-		api.DeviceDiskCritical,
-		api.DeviceDiskNormal,
-		api.DeviceDiskWarning,
-		api.ResourceDeleted,
-		api.DeviceDecommissioned,
-	}
-	return api.ListEventsParams{
-		Order: lo.ToPtr(api.Asc),
-		FieldSelector: lo.ToPtr(fmt.Sprintf(
-			"reason in (%s)",
-			strings.Join(lo.Map(eventsOfInterest, func(r api.EventReason, _ int) string { return string(r) }), ","))),
-		Limit: lo.ToPtr(int32(1000)),
-	}
-}
-
-func (e *EventPoller) ProcessLatestEvents(ctx context.Context, params api.ListEventsParams) {
-	lastEvent := ""
-	oldCheckpoint, _ := activeAlerts.Load().(AlertCheckpoint)
-	needToDiscardedFirstEvent := false
-	if oldCheckpoint.LastEvent != "" {
-		params.Continue = lo.ToPtr(*store.BuildContinueString(oldCheckpoint.LastEvent, 0))
-		// We used the last processed event in the Continue parameter rather than
-		// the next event (because the next event wasn't known yet). Therefore, we
-		// discard the first event to avoid processing it twice.
-		needToDiscardedFirstEvent = true
-	}
-
-	for {
-		// List the events since the last checkpoint
-		events, status := e.handler.ListEvents(ctx, params)
-		if status.Code != http.StatusOK {
-			log.Printf("Failed to list events: %v", status)
-			break
-		}
-
-		for _, ev := range events.Items {
-			if needToDiscardedFirstEvent {
-				needToDiscardedFirstEvent = false
-				continue
-			}
-			lastEvent = (*ev.Metadata.CreationTimestamp).Format(time.RFC3339)
-			processEvent(oldCheckpoint.Alerts, ev)
-		}
-
-		if events.Metadata.Continue == nil {
-			break // No more events to process
-		}
-		params.Continue = events.Metadata.Continue
-	}
-
-	checkpoint := AlertCheckpoint{Version: CurrentAlertCheckpointVersion, Alerts: oldCheckpoint.Alerts, LastEvent: lastEvent}
-	checkpointData, err := json.Marshal(checkpoint)
-	if err != nil {
-		e.log.Fatalf("Failed to marshal alert checkpoint: %v", err)
-	}
-	activeAlerts.Store(checkpoint)
-	e.handler.SetCheckpoint(ctx, AlertCheckpointConsumer, AlertCheckpointKey, checkpointData)
-}
-
-var (
-	appStatusGroup = []string{string(api.DeviceApplicationError), string(api.DeviceApplicationDegraded)}
-	cpuGroup       = []string{string(api.DeviceCPUCritical), string(api.DeviceCPUWarning)}
-	memoryGroup    = []string{string(api.DeviceMemoryCritical), string(api.DeviceMemoryWarning)}
-	diskGroup      = []string{string(api.DeviceDiskCritical), string(api.DeviceDiskWarning)}
-)
-
-func processEvent(alerts map[AlertKey]map[string]struct{}, event api.Event) {
-	alert := Alert{
-		ResourceOrg:  store.NullOrgId.String(),
-		ResourceKind: event.InvolvedObject.Kind,
-		ResourceName: event.InvolvedObject.Name,
-		Reason:       string(event.Reason),
-	}
-	k := key(alert)
-
-	switch event.Reason {
-	case api.ResourceDeleted, api.DeviceDecommissioned:
-		delete(alerts, k)
-	// Applications
-	case api.DeviceApplicationError:
-		setExclusiveAlert(alerts, k, string(api.DeviceApplicationError), appStatusGroup)
-	case api.DeviceApplicationDegraded:
-		setExclusiveAlert(alerts, k, string(api.DeviceApplicationDegraded), appStatusGroup)
-	case api.DeviceApplicationHealthy:
-		clearAlertGroup(alerts, k, appStatusGroup)
-	// CPU
-	case api.DeviceCPUCritical:
-		setExclusiveAlert(alerts, k, string(api.DeviceCPUCritical), cpuGroup)
-	case api.DeviceCPUWarning:
-		setExclusiveAlert(alerts, k, string(api.DeviceCPUWarning), cpuGroup)
-	case api.DeviceCPUNormal:
-		clearAlertGroup(alerts, k, cpuGroup)
-	// Memory
-	case api.DeviceMemoryCritical:
-		setExclusiveAlert(alerts, k, string(api.DeviceMemoryCritical), memoryGroup)
-	case api.DeviceMemoryWarning:
-		setExclusiveAlert(alerts, k, string(api.DeviceMemoryWarning), memoryGroup)
-	case api.DeviceMemoryNormal:
-		clearAlertGroup(alerts, k, memoryGroup)
-	// Disk
-	case api.DeviceDiskCritical:
-		setExclusiveAlert(alerts, k, string(api.DeviceDiskCritical), diskGroup)
-	case api.DeviceDiskWarning:
-		setExclusiveAlert(alerts, k, string(api.DeviceDiskWarning), diskGroup)
-	case api.DeviceDiskNormal:
-		clearAlertGroup(alerts, k, diskGroup)
-	// Device connection status
-	case api.DeviceDisconnected:
-		if _, exists := alerts[k]; !exists {
-			alerts[k] = make(map[string]struct{})
-		}
-		alerts[k][string(api.DeviceDisconnected)] = struct{}{}
-	case api.DeviceConnected:
-		if reasons, exists := alerts[k]; exists {
-			delete(reasons, string(api.DeviceDisconnected))
-			if len(reasons) == 0 {
-				delete(alerts, k)
-			}
-		}
-	}
-}
-
-func setExclusiveAlert(alerts map[AlertKey]map[string]struct{}, key AlertKey, reason string, group []string) {
-	if _, exists := alerts[key]; !exists {
-		alerts[key] = make(map[string]struct{})
-	}
-	for _, r := range group {
-		delete(alerts[key], r)
-	}
-	alerts[key][reason] = struct{}{}
-}
-
-func clearAlertGroup(alerts map[AlertKey]map[string]struct{}, key AlertKey, group []string) {
-	if reasons, exists := alerts[key]; exists {
-		for _, r := range group {
-			delete(reasons, r)
-		}
-		if len(reasons) == 0 {
-			delete(alerts, key)
-		}
-	}
-}
-
-func MetricsHandler(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
-	w.Header().Set("Cache-Control", "no-cache")
-
-	alerts := activeAlerts.Load()
-	if alerts == nil {
-		return
-	}
-
-	data := alerts.(AlertCheckpoint)
-	for key, reasons := range data.Alerts {
-		for reason := range reasons {
-			alert := AlertFromKey(key, reason)
-			fmt.Fprintf(w, "fc_alert_active{org_id=\"%s\", resource_kind=\"%s\", resource_name=\"%s\", reason=\"%s\"} 1\n",
-				alert.ResourceOrg, alert.ResourceKind, alert.ResourceName, alert.Reason)
-		}
 	}
 }

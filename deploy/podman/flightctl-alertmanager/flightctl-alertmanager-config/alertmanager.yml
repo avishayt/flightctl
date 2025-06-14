@@ -1,0 +1,23 @@
+global:
+  # When an alert is no longer firing, alertmanager will wait this
+  # amount of time before sending a resolved notification to avoid
+  # "flapping" notifications.
+  resolve_timeout: 5m
+
+route:
+  # The receiver to send alerts to
+  receiver: 'default'
+  # Time to wait before sending a notification for a new group of alerts.
+  #This lets related alerts "accumulate" and be sent together.
+  group_wait: 30s
+  # Minimum time between notifications for the same group. Helps reduce
+  # repeated notifications.
+  group_interval: 5m
+  # Minimum time before resending a notification for an unresolved alert.
+  repeat_interval: 12h
+
+# List of receivers to send alerts to
+receivers:
+  - name: "default"
+    webhook_configs:
+      - url: "http://localhost:5001/hook"

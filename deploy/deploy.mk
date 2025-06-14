@@ -45,6 +45,9 @@ deploy-db:
 deploy-kv:
 	sudo -E deploy/scripts/deploy_quadlet_service.sh kv
 
+deploy-alertmanager:
+	sudo -E deploy/scripts/deploy_quadlet_service.sh alertmanager
+
 deploy-quadlets:
 	sudo -E deploy/scripts/deploy_quadlets.sh
 
@@ -53,6 +56,9 @@ kill-db:
 
 kill-kv:
 	sudo systemctl stop flightctl-kv.service
+
+kill-alertmanager:
+	sudo systemctl stop flightctl-alertmanager.service
 
 show-podman-secret:
 	sudo podman secret inspect $(SECRET_NAME) --showsecret | jq '.[] | .SecretData'

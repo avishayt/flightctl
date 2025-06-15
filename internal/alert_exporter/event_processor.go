@@ -32,7 +32,6 @@ type CheckpointContext struct {
 }
 
 func (e *EventProcessor) ProcessLatestEvents(ctx context.Context, oldCheckpoint *AlertCheckpoint) (*AlertCheckpoint, error) {
-	lastEvent := ""
 	needToDiscardedFirstEvent := false
 	params := getListEventsParams()
 
@@ -43,6 +42,11 @@ func (e *EventProcessor) ProcessLatestEvents(ctx context.Context, oldCheckpoint 
 		// discard the first event to avoid processing it twice.
 		needToDiscardedFirstEvent = true
 	}
+
+	// Save the current time so that in the next iteration we'll start from this time.
+	// Subtract a millisecond to avoid the rare case of missing a new event that was created
+	// in the same moment as the last processed event.
+	processStartTime := time.Now().Add(-time.Millisecond)
 
 	checkpointCtx := CheckpointContext{
 		alerts:        oldCheckpoint.Alerts,
@@ -60,7 +64,6 @@ func (e *EventProcessor) ProcessLatestEvents(ctx context.Context, oldCheckpoint 
 				needToDiscardedFirstEvent = false
 				continue
 			}
-			lastEvent = (*ev.Metadata.CreationTimestamp).Format(time.RFC3339)
 			checkpointCtx.processEvent(ev)
 		}
 
@@ -70,7 +73,8 @@ func (e *EventProcessor) ProcessLatestEvents(ctx context.Context, oldCheckpoint 
 		params.Continue = events.Metadata.Continue
 	}
 
-	return &AlertCheckpoint{Version: CurrentAlertCheckpointVersion, Alerts: oldCheckpoint.Alerts, LastEvent: lastEvent}, nil
+	fmt.Printf("XXX EVENT PROCESSOR RETURNING CHECKPOINT %+v\n", checkpointCtx.alerts)
+	return &AlertCheckpoint{Version: CurrentAlertCheckpointVersion, Alerts: checkpointCtx.alerts, Updated: checkpointCtx.updatedAlerts, LastEvent: processStartTime.Format(time.RFC3339Nano)}, nil
 }
 
 func getListEventsParams() api.ListEventsParams {
@@ -109,6 +113,7 @@ var (
 )
 
 func (c *CheckpointContext) processEvent(event api.Event) {
+	fmt.Printf("XXX EVENT PROCESSOR PROCESSING EVENT %s\n", event.Reason)
 	switch event.Reason {
 	case api.ResourceDeleted, api.DeviceDecommissioned:
 		c.resolveAllAlertsForResource(event)
@@ -146,6 +151,7 @@ func (c *CheckpointContext) processEvent(event api.Event) {
 	case api.DeviceConnected:
 		c.clearAlertGroup(event, []string{string(api.DeviceDisconnected)})
 	}
+	fmt.Printf("XXX EVENT PROCESSOR PROCESSING EVENT %s END: %d ALERTS\n", event.Reason, len(c.updatedAlerts))
 }
 
 func AlertKeyFromEvent(event api.Event) AlertKey {

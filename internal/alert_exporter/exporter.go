@@ -97,9 +97,15 @@ func (a *AlertExporter) Poll(ctx context.Context) error {
 		if err != nil {
 			return fmt.Errorf("failed processing events: %v", err)
 		}
-		err = alertSender.SendAlerts(checkpoint)
+		if checkpoint.Updated != nil {
+			err = alertSender.SendAlerts(checkpoint)
+			if err != nil {
+				return fmt.Errorf("failed sending alerts: %v", err)
+			}
+		}
+		err = checkpointManager.StoreCheckpoint(ctx, checkpoint)
 		if err != nil {
-			return fmt.Errorf("failed sending alerts: %v", err)
+			return fmt.Errorf("failed storing checkpoint: %v", err)
 		}
 
 		cancel()

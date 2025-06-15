@@ -4,7 +4,7 @@ GO_TEST_FORMAT = pkgname
 GO_TESTING_FLAGS= -count=1 -race $(GO_BUILD_FLAGS)
 
 GO_UNITTEST_DIRS 		= ./internal/... ./api/...
-GO_INTEGRATIONTEST_DIRS = ./test/integration/...
+GO_INTEGRATIONTEST_DIRS = ./test/integration/alerts/...
 GO_E2E_DIRS 			= ./test/e2e/...
 
 GO_UNITTEST_FLAGS 		 = $(GO_TESTING_FLAGS) $(GO_UNITTEST_DIRS)        -coverprofile=$(REPORTS)/unit-coverage.out
@@ -47,7 +47,7 @@ run-integration-test:
 
 integration-test: export FLIGHTCTL_KV_PASSWORD=adminpass
 integration-test: export FLIGHTCTL_POSTGRESQL_MASTER_PASSWORD=adminpass
-integration-test: deploy-db deploy-kv run-integration-test kill-kv kill-db
+integration-test: deploy-db deploy-kv deploy-alertmanager run-integration-test kill-alertmanager kill-kv kill-db
 
 
 deploy-e2e-extras: bin/.ssh/id_rsa.pub bin/e2e-certs/ca.pem

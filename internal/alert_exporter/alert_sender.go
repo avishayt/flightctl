@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"strconv"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -48,6 +47,7 @@ func (a *AlertSender) sendAlerts(alerts []*AlertInfo) error {
 	const batchSize = 100
 	alertmanagerAlerts := make([]AlertmanagerAlert, 0, len(alerts))
 
+	fmt.Printf("XXX ALERT SENDER CALLED TO SEND %d ALERTS\n", len(alerts))
 	for _, alert := range alerts {
 		// Construct the AlertmanagerAlert from your AlertInfo
 		alertmanagerAlert := AlertmanagerAlert{
@@ -91,7 +91,10 @@ func (a *AlertSender) postBatch(batch []AlertmanagerAlert) error {
 		return fmt.Errorf("failed to marshal alerts: %v", err)
 	}
 
-	req, err := http.NewRequest("POST", a.hostname+":"+strconv.Itoa(int(a.port))+"/api/v1/alerts", bytes.NewReader(body))
+	fmt.Printf("XXX ALERT SENDER SENDING %s\n", string(body))
+	url := fmt.Sprintf("http://%s:%d/api/v2/alerts", a.hostname, a.port)
+	req, err := http.NewRequest("POST", url, bytes.NewReader(body))
+
 	if err != nil {
 		return fmt.Errorf("failed to create request: %v", err)
 	}

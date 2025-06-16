@@ -6,7 +6,7 @@ Wants=flightctl-db.service
 
 [Container]
 ContainerName=flightctl-alertmanager
-Image=docker.io/prometheus/alertmanager:latest
+Image=quay.io/prometheus/alertmanager:latest
 Network=flightctl.network
 
 # Run Alertmanager with the config file

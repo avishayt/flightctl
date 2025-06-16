@@ -33,6 +33,11 @@ worker:
 periodic:
   image:
     image: localhost/flightctl-periodic
+    tag: latest
+alertexporter:
+  image:
+    image: localhost/flightctl-alert-exporter
+    tag: latest
 prometheus:
   enabled: true
 ui:

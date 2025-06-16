@@ -140,6 +140,12 @@ periodic:
     image: quay.io/flightctl/flightctl-periodic
     tag: ""
     pullPolicy: ""
+alertexporter:
+  enabled: true
+  image:
+    image: quay.io/flightctl/flightctl-alert-exporter
+    tag: ""
+    pullPolicy: ""
 prometheus:
   enabled: false
 ui:

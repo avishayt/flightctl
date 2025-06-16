@@ -24,6 +24,7 @@ timeout --foreground 300s bash -c '
             --filter "name=flightctl-api" \
             --filter "name=flightctl-worker" \
             --filter "name=flightctl-periodic" \
+            --filter "name=flightctl-alert-exporter" \
             --filter "name=flightctl-db" \
             --filter "name=flightctl-kv" \
             --filter "name=flightctl-alertmanager" \

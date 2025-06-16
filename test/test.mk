@@ -47,7 +47,7 @@ run-integration-test:
 
 integration-test: export FLIGHTCTL_KV_PASSWORD=adminpass
 integration-test: export FLIGHTCTL_POSTGRESQL_MASTER_PASSWORD=adminpass
-integration-test: deploy-db deploy-kv run-integration-test kill-kv kill-db
+integration-test: deploy-db deploy-kv deploy-alertmanager run-integration-test kill-alertmanager kill-kv kill-db
 
 
 deploy-e2e-extras: bin/.ssh/id_rsa.pub bin/e2e-certs/ca.pem

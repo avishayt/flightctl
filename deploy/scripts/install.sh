@@ -70,6 +70,7 @@ render_files() {
     render_service "worker" "${SOURCE_DIR}"
     render_service "db" "${SOURCE_DIR}"
     render_service "kv" "${SOURCE_DIR}"
+    render_service "alertmanager" "${SOURCE_DIR}"
     render_service "ui" "${SOURCE_DIR}"
     render_service "cli-artifacts" "${SOURCE_DIR}"
 

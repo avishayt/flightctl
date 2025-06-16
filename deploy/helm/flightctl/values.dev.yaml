@@ -11,6 +11,7 @@ global:
     agent: 7443
     db: 5432
     kv: 6379
+    alertmanager: 9093
     keycloak: 8081
     prometheus: 9090
     gitserver: 3222

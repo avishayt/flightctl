@@ -157,26 +157,31 @@ const (
 )
 
 type ListParams struct {
-	Limit              int
-	Continue           *Continue
-	FieldSelector      *selector.FieldSelector
-	LabelSelector      *selector.LabelSelector
-	AnnotationSelector *selector.AnnotationSelector
-	SortOrder          *SortOrder
-	SortColumn         *SortColumn
+	Limit               int
+	Continue            *Continue
+	FieldSelector       *selector.FieldSelector
+	LabelSelector       *selector.LabelSelector
+	AnnotationSelector  *selector.AnnotationSelector
+	SortOrder           *SortOrder
+	SortColumn          *SortColumn
+	SecondarySortColumn *SortColumn
 }
 
 type Continue struct {
-	Version int
-	Name    string
-	Count   int64
+	Version       int
+	Name          string
+	Count         int64
+	SecondaryName *string
 }
 
-func BuildContinueString(name string, count int64) *string {
+func BuildContinueString(name string, secondaryName *string, count int64) *string {
 	cont := Continue{
 		Version: CurrentContinueVersion,
 		Name:    name,
 		Count:   count,
+	}
+	if secondaryName != nil {
+		cont.SecondaryName = secondaryName
 	}
 
 	sEnc, _ := json.Marshal(cont)

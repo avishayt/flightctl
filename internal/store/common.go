@@ -143,8 +143,11 @@ func (lq *listQuery) Build(ctx context.Context, db *gorm.DB, orgId uuid.UUID, li
 		return nil, err
 	}
 	column, order := getColumnAndOrder(listParams)
-
-	return query.Order(fmt.Sprintf("%s %s", column, order)), nil
+	orderExpr := fmt.Sprintf("%s %s", column, order)
+	if listParams.SecondarySortColumn != nil {
+		orderExpr += fmt.Sprintf(", %s %s", *listParams.SecondarySortColumn, order)
+	}
+	return query.Order(orderExpr), nil
 }
 
 func (lq *listQuery) resolveOrDefault(sn selector.SelectorName, d string) string {
@@ -170,16 +173,33 @@ func AddPaginationToQuery(query *gorm.DB, limit int, cont *Continue, listParams 
 
 	column, order := getColumnAndOrder(listParams)
 
-	query = query.Where(fmt.Sprintf("%s %s ?", column, map[SortOrder]string{SortAsc: ">=", SortDesc: "<="}[order]), cont.Name)
-	return query
+	op := map[SortOrder]string{SortAsc: ">=", SortDesc: "<="}[order]
+
+	if listParams.SecondarySortColumn != nil && cont.SecondaryName != nil {
+		return query.Where(
+			fmt.Sprintf("(%s, %s) %s (?, ?)", column, *listParams.SecondarySortColumn, op),
+			cont.Name, *cont.SecondaryName)
+	}
+
+	return query.Where(fmt.Sprintf("%s %s ?", column, op), cont.Name)
 }
 
-func CountRemainingItems(query *gorm.DB, lastItemName string, listParams ListParams) int64 {
+func CountRemainingItems(query *gorm.DB, lastItemName string, lastItemSecondaryName *string, listParams ListParams) int64 {
 	var count int64
 
 	column, order := getColumnAndOrder(listParams)
+	op := map[SortOrder]string{SortAsc: ">=", SortDesc: "<="}[order]
 
-	query.Where(fmt.Sprintf("%s %s ?", column, map[SortOrder]string{SortAsc: ">=", SortDesc: "<="}[order]), lastItemName).Count(&count)
+	if listParams.SecondarySortColumn != nil && lastItemSecondaryName != nil {
+		query = query.Where(
+			fmt.Sprintf("(%s, %s) %s (?, ?)", column, *listParams.SecondarySortColumn, op),
+			lastItemName, *lastItemSecondaryName,
+		)
+	} else {
+		query = query.Where(fmt.Sprintf("%s %s ?", column, op), lastItemName)
+	}
+
+	query.Count(&count)
 	return count
 }
 

@@ -384,8 +384,10 @@ func (s *GenericStore[P, M, A, AL]) List(ctx context.Context, orgId uuid.UUID, l
 		lastIndex := len(resourceList) - 1
 		lastItem := resourceList[lastIndex]
 		nextContinueName := P(&lastItem).GetName()
+		var nextContinueSecondaryName *string
 		if listParams.SortColumn != nil && *listParams.SortColumn == SortByCreatedAt {
 			nextContinueName = P(&lastItem).GetTimestamp().Format(time.RFC3339Nano)
+			nextContinueSecondaryName = lo.ToPtr(P(&lastItem).GetName())
 		}
 		resourceList = resourceList[:lastIndex]
 
@@ -400,9 +402,9 @@ func (s *GenericStore[P, M, A, AL]) List(ctx context.Context, orgId uuid.UUID, l
 			if err != nil {
 				return nil, err
 			}
-			numRemainingVal = CountRemainingItems(countQuery, nextContinueName, listParams)
+			numRemainingVal = CountRemainingItems(countQuery, nextContinueName, nextContinueSecondaryName, listParams)
 		}
-		nextContinue = BuildContinueString(nextContinueName, numRemainingVal)
+		nextContinue = BuildContinueString(nextContinueName, nextContinueSecondaryName, numRemainingVal)
 		numRemaining = &numRemainingVal
 	}
 

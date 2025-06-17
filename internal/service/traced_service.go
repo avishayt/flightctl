@@ -562,3 +562,9 @@ func (t *TracedService) SetCheckpoint(ctx context.Context, consumer string, key 
 	endSpan(span, st)
 	return st
 }
+func (t *TracedService) GetDatabaseTime(ctx context.Context) (time.Time, api.Status) {
+	ctx, span := startSpan(ctx, "GetDatabaseTime")
+	resp, st := t.inner.GetDatabaseTime(ctx)
+	endSpan(span, st)
+	return resp, st
+}

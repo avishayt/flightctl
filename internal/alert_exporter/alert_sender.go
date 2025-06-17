@@ -53,6 +53,7 @@ func (a *AlertSender) sendAlerts(alerts []*AlertInfo) error {
 			Labels: map[string]string{
 				"alertname": alert.Reason,
 				"resource":  alert.ResourceName,
+				"org_id":    alert.OrgID,
 			},
 			StartsAt: alert.StartsAt,
 		}

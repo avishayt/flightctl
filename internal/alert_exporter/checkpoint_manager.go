@@ -50,7 +50,7 @@ func (c *CheckpointManager) LoadCheckpoint(ctx context.Context) *AlertCheckpoint
 		if err := json.Unmarshal(previousCheckpoint, checkpoint); err != nil {
 			c.log.Errorf("failed to unmarshal alert checkpoint: %v", err)
 		} else {
-			c.log.Infof("resuming from last event: %s", checkpoint.LastEvent)
+			c.log.Infof("resuming from last timestamp: %s", checkpoint.Timestamp)
 		}
 	}
 

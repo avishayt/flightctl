@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math/rand"
 	"net/http"
+	"strings"
 	"testing"
 	"time"
 
@@ -71,7 +72,7 @@ var _ = Describe("Alert Exporter", func() {
 		serviceHandler = service.NewServiceHandler(storeInst, callbackManager, kvStore, nil, log, "", "")
 		checkpointManager = alert_exporter.NewCheckpointManager(log, serviceHandler)
 		eventProcessor = alert_exporter.NewEventProcessor(log, serviceHandler)
-		alertSender = alert_exporter.NewAlertSender(log, cfg.Alertmanager.Hostname, uint(cfg.Alertmanager.Port))
+		alertSender = alert_exporter.NewAlertSender(log, cfg.Alertmanager.Hostname, cfg.Alertmanager.Port)
 
 		err = db.WithContext(ctx).Exec(`
 				DELETE FROM checkpoints
@@ -86,22 +87,23 @@ var _ = Describe("Alert Exporter", func() {
 		ctrl.Finish()
 	})
 
-	It("publishes a metric when a relevant event occurs", func() {
+	It("publishes an alert when a relevant event occurs", func() {
 		var err error
 		checkpoint := checkpointManager.LoadCheckpoint(ctx)
+		prefix := "publishAlert"
 
-		createEvent(ctx, serviceHandler, api.DeviceCPUWarning, api.DeviceKind, "dev1")
-		createEvent(ctx, serviceHandler, api.ResourceCreated, api.FleetKind, "flt1")
-		createEvent(ctx, serviceHandler, api.DeviceConnected, api.DeviceKind, "dev2")
+		createEvent(ctx, serviceHandler, api.DeviceCPUWarning, api.DeviceKind, fmt.Sprintf("%s-dev1", prefix))
+		createEvent(ctx, serviceHandler, api.ResourceCreated, api.FleetKind, fmt.Sprintf("%s-flt1", prefix))
+		createEvent(ctx, serviceHandler, api.DeviceConnected, api.DeviceKind, fmt.Sprintf("%s-dev2", prefix))
 
 		checkpoint, err = eventProcessor.ProcessLatestEvents(ctx, checkpoint)
 		Expect(err).ToNot(HaveOccurred())
 		err = alertSender.SendAlerts(checkpoint)
 		Expect(err).ToNot(HaveOccurred())
 
-		alerts := getAlerts()
+		alerts := getAlerts(prefix)
 		Expect(alerts).To(HaveLen(1))
-		Expect(alerts[0].Labels).To(HaveKeyWithValue("resource", "dev1"))
+		Expect(alerts[0].Labels).To(HaveKeyWithValue("resource", fmt.Sprintf("%s-dev1", prefix)))
 		Expect(alerts[0].Labels).To(HaveKeyWithValue("alertname", "DeviceCPUWarning"))
 		Expect(alerts[0].StartsAt).ToNot(BeZero())
 		Expect(alerts[0].Status.State).To(Equal("active"))
@@ -110,52 +112,54 @@ var _ = Describe("Alert Exporter", func() {
 	It("clears an alert when the resource is deleted", func() {
 		var err error
 		checkpoint := checkpointManager.LoadCheckpoint(ctx)
+		prefix := "clearAlertWhenDeleted"
 
-		createEvent(ctx, serviceHandler, api.DeviceCPUWarning, api.DeviceKind, "dev1")
+		createEvent(ctx, serviceHandler, api.DeviceCPUWarning, api.DeviceKind, fmt.Sprintf("%s-dev1", prefix))
 		checkpoint, err = eventProcessor.ProcessLatestEvents(ctx, checkpoint)
 		Expect(err).ToNot(HaveOccurred())
 		err = alertSender.SendAlerts(checkpoint)
 		Expect(err).ToNot(HaveOccurred())
 
-		alerts := getAlerts()
+		alerts := getAlerts(prefix)
 		Expect(alerts).To(HaveLen(1))
-		Expect(alerts[0].Labels).To(HaveKeyWithValue("resource", "dev1"))
+		Expect(alerts[0].Labels).To(HaveKeyWithValue("resource", fmt.Sprintf("%s-dev1", prefix)))
 		Expect(alerts[0].Labels).To(HaveKeyWithValue("alertname", "DeviceCPUWarning"))
 		Expect(alerts[0].StartsAt).ToNot(BeZero())
 		Expect(alerts[0].Status.State).To(Equal("active"))
 
-		createEvent(ctx, serviceHandler, api.ResourceDeleted, api.DeviceKind, "dev1")
+		createEvent(ctx, serviceHandler, api.ResourceDeleted, api.DeviceKind, fmt.Sprintf("%s-dev1", prefix))
 		checkpoint, err = eventProcessor.ProcessLatestEvents(ctx, checkpoint)
 		Expect(err).ToNot(HaveOccurred())
 		err = alertSender.SendAlerts(checkpoint)
 		Expect(err).ToNot(HaveOccurred())
 
-		alerts = getAlerts()
+		alerts = getAlerts(prefix)
 		Expect(alerts).To(HaveLen(0))
 	})
 
 	It("clears alerts when they are resolved", func() {
 		var err error
 		checkpoint := checkpointManager.LoadCheckpoint(ctx)
+		prefix := "clearAlertWhenResolved"
 
-		createEvent(ctx, serviceHandler, api.DeviceCPUCritical, api.DeviceKind, "dev1")
-		createEvent(ctx, serviceHandler, api.DeviceMemoryCritical, api.DeviceKind, "dev2")
-		createEvent(ctx, serviceHandler, api.DeviceDiskCritical, api.DeviceKind, "dev3")
-		createEvent(ctx, serviceHandler, api.DeviceApplicationError, api.DeviceKind, "dev4")
-		createEvent(ctx, serviceHandler, api.DeviceDisconnected, api.DeviceKind, "dev5")
+		createEvent(ctx, serviceHandler, api.DeviceCPUCritical, api.DeviceKind, fmt.Sprintf("%s-dev1", prefix))
+		createEvent(ctx, serviceHandler, api.DeviceMemoryCritical, api.DeviceKind, fmt.Sprintf("%s-dev2", prefix))
+		createEvent(ctx, serviceHandler, api.DeviceDiskCritical, api.DeviceKind, fmt.Sprintf("%s-dev3", prefix))
+		createEvent(ctx, serviceHandler, api.DeviceApplicationError, api.DeviceKind, fmt.Sprintf("%s-dev4", prefix))
+		createEvent(ctx, serviceHandler, api.DeviceDisconnected, api.DeviceKind, fmt.Sprintf("%s-dev5", prefix))
 
 		checkpoint, err = eventProcessor.ProcessLatestEvents(ctx, checkpoint)
 		Expect(err).ToNot(HaveOccurred())
 		err = alertSender.SendAlerts(checkpoint)
 		Expect(err).ToNot(HaveOccurred())
 
-		alerts := getAlerts()
+		alerts := getAlerts(prefix)
 		Expect(alerts).To(HaveLen(5))
 		// Check that the 5 alerts have the correct labels
 		Expect(alerts).To(ConsistOf(
 			MatchFields(IgnoreExtras, Fields{
 				"Labels": SatisfyAll(
-					HaveKeyWithValue("resource", "dev1"),
+					HaveKeyWithValue("resource", fmt.Sprintf("%s-dev1", prefix)),
 					HaveKeyWithValue("alertname", "DeviceCPUCritical"),
 				),
 				"StartsAt": Not(BeZero()),
@@ -165,7 +169,7 @@ var _ = Describe("Alert Exporter", func() {
 			}),
 			MatchFields(IgnoreExtras, Fields{
 				"Labels": SatisfyAll(
-					HaveKeyWithValue("resource", "dev2"),
+					HaveKeyWithValue("resource", fmt.Sprintf("%s-dev2", prefix)),
 					HaveKeyWithValue("alertname", "DeviceMemoryCritical"),
 				),
 				"StartsAt": Not(BeZero()),
@@ -175,7 +179,7 @@ var _ = Describe("Alert Exporter", func() {
 			}),
 			MatchFields(IgnoreExtras, Fields{
 				"Labels": SatisfyAll(
-					HaveKeyWithValue("resource", "dev3"),
+					HaveKeyWithValue("resource", fmt.Sprintf("%s-dev3", prefix)),
 					HaveKeyWithValue("alertname", "DeviceDiskCritical"),
 				),
 				"StartsAt": Not(BeZero()),
@@ -185,7 +189,7 @@ var _ = Describe("Alert Exporter", func() {
 			}),
 			MatchFields(IgnoreExtras, Fields{
 				"Labels": SatisfyAll(
-					HaveKeyWithValue("resource", "dev4"),
+					HaveKeyWithValue("resource", fmt.Sprintf("%s-dev4", prefix)),
 					HaveKeyWithValue("alertname", "DeviceApplicationError"),
 				),
 				"StartsAt": Not(BeZero()),
@@ -195,7 +199,7 @@ var _ = Describe("Alert Exporter", func() {
 			}),
 			MatchFields(IgnoreExtras, Fields{
 				"Labels": SatisfyAll(
-					HaveKeyWithValue("resource", "dev5"),
+					HaveKeyWithValue("resource", fmt.Sprintf("%s-dev5", prefix)),
 					HaveKeyWithValue("alertname", "DeviceDisconnected"),
 				),
 				"StartsAt": Not(BeZero()),
@@ -205,22 +209,22 @@ var _ = Describe("Alert Exporter", func() {
 			}),
 		))
 
-		createEvent(ctx, serviceHandler, api.DeviceCPUNormal, api.DeviceKind, "dev1")
-		createEvent(ctx, serviceHandler, api.DeviceMemoryNormal, api.DeviceKind, "dev2")
-		createEvent(ctx, serviceHandler, api.DeviceDiskNormal, api.DeviceKind, "dev3")
-		createEvent(ctx, serviceHandler, api.DeviceApplicationHealthy, api.DeviceKind, "dev4")
-		createEvent(ctx, serviceHandler, api.DeviceConnected, api.DeviceKind, "dev5")
+		createEvent(ctx, serviceHandler, api.DeviceCPUNormal, api.DeviceKind, fmt.Sprintf("%s-dev1", prefix))
+		createEvent(ctx, serviceHandler, api.DeviceMemoryNormal, api.DeviceKind, fmt.Sprintf("%s-dev2", prefix))
+		createEvent(ctx, serviceHandler, api.DeviceDiskNormal, api.DeviceKind, fmt.Sprintf("%s-dev3", prefix))
+		createEvent(ctx, serviceHandler, api.DeviceApplicationHealthy, api.DeviceKind, fmt.Sprintf("%s-dev4", prefix))
+		createEvent(ctx, serviceHandler, api.DeviceConnected, api.DeviceKind, fmt.Sprintf("%s-dev5", prefix))
 		checkpoint, err = eventProcessor.ProcessLatestEvents(ctx, checkpoint)
 		Expect(err).ToNot(HaveOccurred())
 		err = alertSender.SendAlerts(checkpoint)
 		Expect(err).ToNot(HaveOccurred())
 
-		alerts = getAlerts()
+		alerts = getAlerts(prefix)
 		Expect(alerts).To(HaveLen(0))
 	})
 
 	It("replays events if the checkpoint is deleted", func() {
-		replayEventsFromFreshState(ctx, db, serviceHandler, checkpointManager, eventProcessor, alertSender, func() bool {
+		replayEventsFromFreshState(ctx, "replayEventsIfCheckpointDeleted", db, serviceHandler, checkpointManager, eventProcessor, alertSender, func() bool {
 			err := db.WithContext(ctx).Exec(`
 				DELETE FROM checkpoints
 				WHERE consumer = ? AND key = ?`, alert_exporter.AlertCheckpointConsumer, alert_exporter.AlertCheckpointKey).Error
@@ -230,7 +234,7 @@ var _ = Describe("Alert Exporter", func() {
 	})
 
 	It("replays events if the checkpoint is garbage", func() {
-		replayEventsFromFreshState(ctx, db, serviceHandler, checkpointManager, eventProcessor, alertSender, func() bool {
+		replayEventsFromFreshState(ctx, "replayEventsIfCheckpointGarbage", db, serviceHandler, checkpointManager, eventProcessor, alertSender, func() bool {
 			err := db.WithContext(ctx).Exec(`
 				UPDATE checkpoints SET value = 'corrupted json here'
 				WHERE consumer = ? AND key = ?`, alert_exporter.AlertCheckpointConsumer, alert_exporter.AlertCheckpointKey).Error
@@ -240,7 +244,7 @@ var _ = Describe("Alert Exporter", func() {
 	})
 
 	It("starts fresh if the checkpoint and all events are deleted", func() {
-		replayEventsFromFreshState(ctx, db, serviceHandler, checkpointManager, eventProcessor, alertSender, func() bool {
+		replayEventsFromFreshState(ctx, "replayEventsIfDBDeleted", db, serviceHandler, checkpointManager, eventProcessor, alertSender, func() bool {
 			err := db.WithContext(ctx).Exec(`
 				DELETE FROM checkpoints WHERE consumer = ? AND key = ?`, alert_exporter.AlertCheckpointConsumer, alert_exporter.AlertCheckpointKey).Error
 			Expect(err).ToNot(HaveOccurred())
@@ -258,7 +262,7 @@ func createEvent(ctx context.Context, handler service.Service, reason api.EventR
 		InvolvedObject: api.ObjectReference{Kind: kind, Name: name},
 		Metadata:       api.ObjectMeta{Name: lo.ToPtr(fmt.Sprintf("test-event-%d", rand.Int63()))}, //nolint:gosec
 	}
-	time.Sleep(1 * time.Millisecond) // Ensure different timestamps
+	//time.Sleep(1 * time.Millisecond) // Ensure different timestamps
 	handler.CreateEvent(ctx, ev)
 }
 
@@ -273,25 +277,32 @@ type AlertmanagerAlert struct {
 	} `json:"status"`
 }
 
-func getAlerts() []AlertmanagerAlert {
-	// List the alerts from Alertmanager
+func getAlerts(prefix string) []AlertmanagerAlert {
 	resp, err := http.Get("http://localhost:9093/api/v2/alerts")
 	if err != nil {
 		return nil
 	}
 	defer resp.Body.Close()
+
 	var alerts []AlertmanagerAlert
 	if err := json.NewDecoder(resp.Body).Decode(&alerts); err != nil {
 		return nil
 	}
-	return alerts
+
+	var activeAlerts []AlertmanagerAlert
+	for _, alert := range alerts {
+		if strings.HasPrefix(alert.Labels["resource"], prefix) {
+			activeAlerts = append(activeAlerts, alert)
+		}
+	}
+	return activeAlerts
 }
 
-func replayEventsFromFreshState(ctx context.Context, db *gorm.DB, serviceHandler service.Service, checkpointManager *alert_exporter.CheckpointManager, eventProcessor *alert_exporter.EventProcessor, alertSender *alert_exporter.AlertSender, checkpointSetup func() bool) {
+func replayEventsFromFreshState(ctx context.Context, prefix string, db *gorm.DB, serviceHandler service.Service, checkpointManager *alert_exporter.CheckpointManager, eventProcessor *alert_exporter.EventProcessor, alertSender *alert_exporter.AlertSender, checkpointSetup func() bool) {
 	// Add an alert for dev1
 	var err error
 	checkpoint := checkpointManager.LoadCheckpoint(ctx)
-	createEvent(ctx, serviceHandler, api.DeviceCPUWarning, api.DeviceKind, "dev1")
+	createEvent(ctx, serviceHandler, api.DeviceCPUWarning, api.DeviceKind, fmt.Sprintf("%s-dev1", prefix))
 
 	checkpoint, err = eventProcessor.ProcessLatestEvents(ctx, checkpoint)
 	Expect(err).ToNot(HaveOccurred())
@@ -311,7 +322,7 @@ func replayEventsFromFreshState(ctx context.Context, db *gorm.DB, serviceHandler
 
 	// Replay events for dev2
 	newCheckpoint := checkpointManager.LoadCheckpoint(ctx)
-	createEvent(ctx, serviceHandler, api.DeviceMemoryWarning, api.DeviceKind, "dev2")
+	createEvent(ctx, serviceHandler, api.DeviceMemoryWarning, api.DeviceKind, fmt.Sprintf("%s-dev2", prefix))
 
 	newCheckpoint, err = eventProcessor.ProcessLatestEvents(ctx, newCheckpoint)
 	Expect(err).ToNot(HaveOccurred())

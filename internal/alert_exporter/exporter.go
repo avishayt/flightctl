@@ -3,7 +3,7 @@
 // Alert Structure:
 //   Alerts are stored in-memory using the following structure:
 //
-//     map[AlertKey]map[string]struct{}
+//     map[AlertKey]map[string]*AlertInfo
 //
 //   - AlertKey is a composite string in the format "org:kind:name", uniquely identifying a resource.
 //   - The nested map tracks active alert reasons (as strings) for that resource.
@@ -17,13 +17,13 @@
 //     - DeviceDisconnected is added to the alert set, and DeviceConnected removes it.
 //     - Terminal events (e.g., ResourceDeleted, DeviceDecommissioned) remove all alerts for the resource.
 //
-// Prometheus Integration:
-//   - Active alerts are exposed via the /metrics endpoint as:
-//
-//       fc_alert_active{org_id="...", resource_kind="...", resource_name="...", reason="..."} 1
-//
-//   - When an alert is cleared (i.e., removed from the map), it will naturally expire from Prometheus
-//     after the default staleness timeout (typically 5 minutes).
+// Alertmanager Integration:
+//   - Changes to alert states are pushed to Alertmanager via HTTP POST requests in batches.
+//   - Alerts have labels:
+//     - alertname: the reason for the alert
+//     - resource: the name of the resource
+//     - org_id: the organization ID of the resource
+//   - Sets the startsAt field when an alert is triggered, and endsAt upon resolution.
 //
 // Checkpointing:
 //   - The exporter periodically saves its state (active alerts and the last processed event).
@@ -48,6 +48,7 @@ type AlertKey string
 type AlertInfo struct {
 	ResourceName string
 	ResourceKind string
+	OrgID        string
 	Reason       string
 	StartsAt     time.Time
 	EndsAt       *time.Time
@@ -55,7 +56,7 @@ type AlertInfo struct {
 
 type AlertCheckpoint struct {
 	Version   int
-	LastEvent string
+	Timestamp string
 	Alerts    map[AlertKey]map[string]*AlertInfo
 	Updated   []*AlertInfo
 }
@@ -81,7 +82,7 @@ func NewAlertExporter(log *logrus.Logger, handler service.Service, config *confi
 func (a *AlertExporter) Poll(ctx context.Context) error {
 	checkpointManager := NewCheckpointManager(a.log, a.handler)
 	eventProcessor := NewEventProcessor(a.log, a.handler)
-	alertSender := NewAlertSender(a.log, a.config.Alertmanager.Hostname, uint(a.config.Alertmanager.Port))
+	alertSender := NewAlertSender(a.log, a.config.Alertmanager.Hostname, a.config.Alertmanager.Port)
 	var err error
 
 	ticker := time.NewTicker(time.Duration(a.config.Service.AlertPollingInterval))
@@ -91,23 +92,29 @@ func (a *AlertExporter) Poll(ctx context.Context) error {
 
 	for {
 		<-ticker.C
-		tickerCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 
-		checkpoint, err = eventProcessor.ProcessLatestEvents(tickerCtx, checkpoint)
-		if err != nil {
-			return fmt.Errorf("failed processing events: %v", err)
-		}
-		if checkpoint.Updated != nil {
-			err = alertSender.SendAlerts(checkpoint)
+		func() {
+			tickerCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+			defer cancel()
+
+			checkpoint, err = eventProcessor.ProcessLatestEvents(tickerCtx, checkpoint)
 			if err != nil {
-				return fmt.Errorf("failed sending alerts: %v", err)
+				a.log.Errorf("failed processing events: %v", err)
+				return
 			}
-		}
-		err = checkpointManager.StoreCheckpoint(ctx, checkpoint)
-		if err != nil {
-			return fmt.Errorf("failed storing checkpoint: %v", err)
-		}
-
-		cancel()
+			if checkpoint.Updated != nil {
+				err = alertSender.SendAlerts(checkpoint)
+				if err != nil {
+					a.log.Errorf("failed sending alerts: %v", err)
+					return
+				}
+			}
+			err = checkpointManager.StoreCheckpoint(tickerCtx, checkpoint)
+			if err != nil {
+				a.log.Errorf("failed storing checkpoint: %v", err)
+				return
+			}
+		}()
 	}
+
 }

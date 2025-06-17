@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"time"
 
 	"github.com/flightctl/flightctl/internal/store/model"
 	"github.com/sirupsen/logrus"
@@ -16,6 +17,7 @@ type Checkpoint interface {
 	InitialMigration(ctx context.Context) error
 	Set(ctx context.Context, consumer string, key string, value []byte) error
 	Get(ctx context.Context, consumer string, key string) ([]byte, error)
+	GetDatabaseTime(ctx context.Context) (time.Time, error)
 }
 
 type CheckpointStore struct {
@@ -81,4 +83,10 @@ func (s *CheckpointStore) Get(ctx context.Context, consumer string, key string) 
 	}
 
 	return decompressed, nil
+}
+
+func (s *CheckpointStore) GetDatabaseTime(ctx context.Context) (time.Time, error) {
+	var dbTime time.Time
+	err := s.getDB(ctx).Raw("SELECT now()").Scan(&dbTime).Error
+	return dbTime, err
 }

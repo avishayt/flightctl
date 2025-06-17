@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"time"
 
 	api "github.com/flightctl/flightctl/api/v1alpha1"
 	"github.com/samber/lo"
@@ -20,4 +21,10 @@ func (h *ServiceHandler) SetCheckpoint(ctx context.Context, consumer string, key
 	err := h.store.Checkpoint().Set(ctx, consumer, key, value)
 	status := StoreErrorToApiStatus(err, false, CheckpointKind, lo.ToPtr(fmt.Sprintf("%s/%s", consumer, key)))
 	return status
+}
+
+func (h *ServiceHandler) GetDatabaseTime(ctx context.Context) (time.Time, api.Status) {
+	dbTime, err := h.store.Checkpoint().GetDatabaseTime(ctx)
+	status := StoreErrorToApiStatus(err, false, CheckpointKind, nil)
+	return dbTime, status
 }

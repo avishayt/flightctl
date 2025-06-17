@@ -32,21 +32,7 @@ type CheckpointContext struct {
 }
 
 func (e *EventProcessor) ProcessLatestEvents(ctx context.Context, oldCheckpoint *AlertCheckpoint) (*AlertCheckpoint, error) {
-	needToDiscardedFirstEvent := false
-	params := getListEventsParams()
-
-	if oldCheckpoint.LastEvent != "" {
-		params.Continue = lo.ToPtr(*store.BuildContinueString(oldCheckpoint.LastEvent, 0))
-		// We used the last processed event in the Continue parameter rather than
-		// the next event (because the next event wasn't known yet). Therefore, we
-		// discard the first event to avoid processing it twice.
-		needToDiscardedFirstEvent = true
-	}
-
-	// Save the current time so that in the next iteration we'll start from this time.
-	// Subtract a millisecond to avoid the rare case of missing a new event that was created
-	// in the same moment as the last processed event.
-	processStartTime := time.Now().Add(-time.Millisecond)
+	params := getListEventsParams(oldCheckpoint.Timestamp)
 
 	checkpointCtx := CheckpointContext{
 		alerts:        oldCheckpoint.Alerts,
@@ -58,12 +44,9 @@ func (e *EventProcessor) ProcessLatestEvents(ctx context.Context, oldCheckpoint 
 		if status.Code != http.StatusOK {
 			return nil, fmt.Errorf("Failed to list events: %s", status.Message)
 		}
+		fmt.Printf("XXX ListEvents got %d events\n", len(events.Items))
 
 		for _, ev := range events.Items {
-			if needToDiscardedFirstEvent {
-				needToDiscardedFirstEvent = false
-				continue
-			}
 			checkpointCtx.processEvent(ev)
 		}
 
@@ -73,10 +56,23 @@ func (e *EventProcessor) ProcessLatestEvents(ctx context.Context, oldCheckpoint 
 		params.Continue = events.Metadata.Continue
 	}
 
-	return &AlertCheckpoint{Version: CurrentAlertCheckpointVersion, Alerts: checkpointCtx.alerts, Updated: checkpointCtx.updatedAlerts, LastEvent: processStartTime.Format(time.RFC3339Nano)}, nil
+	// Fetch the current time from the DB to know where to
+	// start from in the next iteration. We go back a
+	// microsecond to avoid missing events in case they
+	// were emitted at the exact same time. This may cause
+	// us to process events twice, but it's better than
+	// missing events.
+	dbTime, status := e.handler.GetDatabaseTime(ctx)
+	if status.Code != http.StatusOK {
+		return nil, fmt.Errorf("failed to get DB time: %s", status.Message)
+	}
+	timestamp := dbTime.Add(-time.Microsecond)
+	fmt.Printf("XXX timestamp: %v\n", timestamp)
+
+	return &AlertCheckpoint{Version: CurrentAlertCheckpointVersion, Alerts: checkpointCtx.alerts, Updated: checkpointCtx.updatedAlerts, Timestamp: timestamp.Format(time.RFC3339Nano)}, nil
 }
 
-func getListEventsParams() api.ListEventsParams {
+func getListEventsParams(newerThan string) api.ListEventsParams {
 	eventsOfInterest := []api.EventReason{
 		api.DeviceApplicationDegraded,
 		api.DeviceApplicationError,
@@ -95,12 +91,22 @@ func getListEventsParams() api.ListEventsParams {
 		api.ResourceDeleted,
 		api.DeviceDecommissioned,
 	}
+
+	fieldSelectors := []string{
+		fmt.Sprintf("reason in (%s)",
+			strings.Join(lo.Map(eventsOfInterest, func(r api.EventReason, _ int) string {
+				return string(r)
+			}), ",")),
+	}
+	if newerThan != "" {
+		fieldSelectors = append(fieldSelectors,
+			fmt.Sprintf("metadata.creationTimestamp>%s", newerThan))
+	}
+
 	return api.ListEventsParams{
-		Order: lo.ToPtr(api.Asc),
-		FieldSelector: lo.ToPtr(fmt.Sprintf(
-			"reason in (%s)",
-			strings.Join(lo.Map(eventsOfInterest, func(r api.EventReason, _ int) string { return string(r) }), ","))),
-		Limit: lo.ToPtr(int32(1000)),
+		Order:         lo.ToPtr(api.Asc), // Oldest to newest
+		FieldSelector: lo.ToPtr(strings.Join(fieldSelectors, ",")),
+		Limit:         lo.ToPtr(int32(1000)),
 	}
 }
 
@@ -112,6 +118,7 @@ var (
 )
 
 func (c *CheckpointContext) processEvent(event api.Event) {
+	fmt.Println("XXX Processing event:", event)
 	switch event.Reason {
 	case api.ResourceDeleted, api.DeviceDecommissioned:
 		c.resolveAllAlertsForResource(event)
@@ -149,6 +156,7 @@ func (c *CheckpointContext) processEvent(event api.Event) {
 	case api.DeviceConnected:
 		c.clearAlertGroup(event, []string{string(api.DeviceDisconnected)})
 	}
+	fmt.Printf("XXX after processed event: %+v\n", c.alerts)
 }
 
 func AlertKeyFromEvent(event api.Event) AlertKey {
@@ -190,6 +198,7 @@ func (c *CheckpointContext) setAlert(event api.Event, reason string, group []str
 	if !c.alerts[k][reason].StartsAt.Equal(*event.Metadata.CreationTimestamp) {
 		c.alerts[k][reason].ResourceName = event.InvolvedObject.Name
 		c.alerts[k][reason].ResourceKind = event.InvolvedObject.Kind
+		c.alerts[k][reason].OrgID = store.NullOrgId.String()
 		c.alerts[k][reason].Reason = reason
 		c.alerts[k][reason].StartsAt = *event.Metadata.CreationTimestamp
 		c.alerts[k][reason].EndsAt = nil

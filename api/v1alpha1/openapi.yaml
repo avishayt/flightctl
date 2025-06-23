@@ -2896,7 +2896,7 @@ paths:
       tags:
         - fleet
       description: read the specified template version
-      operationId: getTemplateVersion
+      operationId: geteyJhbGciOiJIUzUxMiIsInR5cCIgOiAiSldUIiwia2lkIiA6ICJmNzNhMjQxOS05ODkyLTQzZmEtYjhmZS1lOTY2MWMzOTRmMzYifQ.eyJleHAiOjE3NTAzMjkzNTEsImlhdCI6MTc1MDMyMjE1MSwianRpIjoiNzM3ZWUzNGUtNDJiOC00OTY1LTg2MWMtMzEyOGFkM2VlZWU3IiwiaXNzIjoiaHR0cHM6Ly9hdXRoLmZsaWdodGN0bC1zdGFuZGFsb25lLWV4dC5hcHBzLnN0YWdpbmcuZWNvZW5nLWZsaWdodGN0bC5kZXZjbHVzdGVyLm9wZW5zaGlmdC5jb20vcmVhbG1zL2ZsaWdodGN0bCIsImF1ZCI6Imh0dHBzOi8vYXV0aC5mbGlnaHRjdGwtc3RhbmRhbG9uZS1leHQuYXBwcy5zdGFnaW5nLmVjb2VuZy1mbGlnaHRjdGwuZGV2Y2x1c3Rlci5vcGVuc2hpZnQuY29tL3JlYWxtcy9mbGlnaHRjdGwiLCJzdWIiOiJkZW1vdXNlciIsInR5cCI6IlJlZnJlc2giLCJhenAiOiJmbGlnaHRjdGwiLCJzaWQiOiIxN2ZlNDc1OS04MDY5LTQxMjAtYjNmMy0zYjc0MzRlMjUzYjUiLCJzY29wZSI6Im9wZW5pZCBhY3Igcm9sZXMgcHJvZmlsZSB3ZWItb3JpZ2lucyBiYXNpYyBlbWFpbCJ9.uj95jhjzw1F93iohgZql6hHzJ77Tnyo5OWX_L_5x0ZdoM0OY-ndvGRSiqu0EdPtJt7qK20S2ou0BNR6KQkNnyATemplateVersion
       parameters:
         - name: fleet
           in: path
@@ -4916,7 +4916,6 @@ components:
       - 'Accessible'            # ResourceSync
       - 'ResourceParsed'        # ResourceSync
       - 'Synced'                # ResourceSync
-      - 'OverlappingSelectors'  # Fleet
       - 'Valid'                 # Fleet
       - 'RolloutInProgress'     # Fleet
       - 'Updating'              # Device
@@ -4932,7 +4931,6 @@ components:
       - ResourceSyncAccessible
       - ResourceSyncResourceParsed
       - ResourceSyncSynced
-      - FleetOverlappingSelectors
       - FleetValid
       - FleetRolloutInProgress
       - DeviceUpdating

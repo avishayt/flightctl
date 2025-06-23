@@ -16,25 +16,18 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-// Wait to be notified via channel about fleet template updates, exit upon ctx.Done()
-// The logic assumes that we deal with one update at a time. Later, we can increase scale
-// by dealing with one update per org at a time.
+// This file implements the fleetSelectorMatching async task, which ensures that devices are
+// correctly associated with fleets based on label selectors.
 //
-// We have 4 cases:
-// 1. Fleet with no overlapping selectors, create/update/delete:
-//    Reference kind: Fleet
-//    Task description: Iterate devices that match the fleet's selector and set owners/conditions as necessary
-// 2. Fleet with overlapping selectors, create/update/delete:
-//    Reference kind: Fleet
-//    Task description: Iterate all fleets and devices in the org and set owners/conditions as necessary
-// 3. Device with a single owner, create/update (no work needed for delete):
-//    Reference kind: Device
-//    Task description: Iterate fleets and set the device's owner/conditions as necessary
-// 4. Device with multiple owners, create/update/delete:
-//    Reference kind: Device
-//    Task description: Iterate all fleets and devices in the org and set owners/conditions as necessary
+// Behavior:
+// - Runs when a fleet or device is created or updated.
+// - Evaluates which fleets match each device based on selectors.
+// - Updates the device's metadata.owner field if exactly one fleet matches.
+// - If multiple fleets match, leaves the owner unchanged and sets the "MultipleOwners" condition.
+// - If no fleets match, clears the owner.
 //
-// In addition, we have the cases where the user deleted all fleets or devices in an org
+// Notes:
+// - The task is designed to be idempotent. Ownership and conditions are updated only when needed.
 
 func fleetSelectorMatching(ctx context.Context, resourceRef *tasks_client.ResourceReference, serviceHandler service.Service, callbackManager tasks_client.CallbackManager, log logrus.FieldLogger) error {
 	logic := FleetSelectorMatchingLogic{
@@ -49,13 +42,9 @@ func fleetSelectorMatching(ctx context.Context, resourceRef *tasks_client.Resour
 
 	switch {
 	case resourceRef.Op == tasks_client.FleetSelectorMatchOpUpdate && resourceRef.Kind == api.FleetKind:
-		err = logic.FleetSelectorUpdatedNoOverlapping(ctx)
-	case resourceRef.Op == tasks_client.FleetSelectorMatchOpUpdateOverlap && resourceRef.Kind == api.FleetKind:
-		err = logic.HandleOrgwideUpdate(ctx)
+		err = logic.FleetSelectorUpdated(ctx)
 	case resourceRef.Op == tasks_client.FleetSelectorMatchOpUpdate && resourceRef.Kind == api.DeviceKind:
-		err = logic.CompareFleetsAndSetDeviceOwner(ctx)
-	case resourceRef.Op == tasks_client.FleetSelectorMatchOpUpdateOverlap && resourceRef.Kind == api.DeviceKind:
-		err = logic.HandleOrgwideUpdate(ctx)
+		err = logic.DeviceLabelsUpdated(ctx)
 	default:
 		err = fmt.Errorf("FleetSelectorMatching called with unexpected kind %s and op %s", resourceRef.Kind, resourceRef.Op)
 	}
@@ -116,7 +105,7 @@ func (f FleetSelectorMatchingLogic) resolveNoDeviceOwner(ctx context.Context, lo
 }
 
 // Iterate devices that match the fleet's selector and set owners/conditions as necessary
-func (f FleetSelectorMatchingLogic) FleetSelectorUpdatedNoOverlapping(ctx context.Context) error {
+func (f FleetSelectorMatchingLogic) FleetSelectorUpdated(ctx context.Context) error {
 	f.log.Infof("Checking fleet owner due to fleet selector update %s/%s", f.resourceRef.OrgID, f.resourceRef.Name)
 
 	fleet, status := f.serviceHandler.GetFleet(ctx, f.resourceRef.Name, api.GetFleetParams{})
@@ -326,7 +315,7 @@ func (f FleetSelectorMatchingLogic) removeOwnerFromMatchingDevices(ctx context.C
 }
 
 // Iterate fleets and set the device's owner/conditions as necessary
-func (f FleetSelectorMatchingLogic) CompareFleetsAndSetDeviceOwner(ctx context.Context) error {
+func (f FleetSelectorMatchingLogic) DeviceLabelsUpdated(ctx context.Context) error {
 	f.log.Infof("Checking fleet owner due to device label update %s/%s", f.resourceRef.OrgID, f.resourceRef.Name)
 
 	device, status := f.serviceHandler.GetDevice(ctx, f.resourceRef.Name)
@@ -359,17 +348,15 @@ func (f FleetSelectorMatchingLogic) CompareFleetsAndSetDeviceOwner(ctx context.C
 		return err
 	}
 
-	// Iterate over all fleets and find the (hopefully) one that matches
-	matchingFleets, err := f.findDeviceOwnerAmongAllFleets(ctx, device, currentOwnerFleet, fleets)
+	matchingFleets := findMatchingFleets(*device.Metadata.Labels, fleets)
+
+	err = f.setDeviceOwnerAccordingToMatchingFleets(ctx, device, currentOwnerFleet, matchingFleets)
 	if err != nil {
-		return fmt.Errorf("failed finding matching fleet: %w", err)
+		return err
 	}
 
-	if len(*matchingFleets) > 1 {
-		err = f.setOverlappingFleetConditions(ctx, *matchingFleets)
-		if err != nil {
-			return err
-		}
+	if err = f.setDeviceMultipleOwnersCondition(ctx, device, matchingFleets); err != nil {
+		return err
 	}
 
 	return nil
@@ -496,7 +483,14 @@ func (f FleetSelectorMatchingLogic) findDeviceOwnerAmongAllFleets(ctx context.Co
 }
 
 func (f FleetSelectorMatchingLogic) setDeviceMultipleOwnersCondition(ctx context.Context, device *api.Device, matchingFleets []string) error {
-	newConditionMessage := createOverlappingConditionMessage(matchingFleets)
+	newConditionMessage := ""
+	if len(matchingFleets) > 1 {
+		// this message is used to determine whether an update occurs or not, so do a quick sort on a copy to ensure
+		// stable updates without mutating the caller args
+		fleets := append([]string{}, matchingFleets...)
+		sort.Strings(fleets)
+		newConditionMessage = fmt.Sprintf("Device matches fleets %s", strings.Join(fleets, ","))
+	}
 	currentConditionMessage := ""
 	if device.Status != nil {
 		if cond := api.FindStatusCondition(device.Status.Conditions, api.DeviceMultipleOwners); cond != nil {
@@ -535,8 +529,8 @@ func (f FleetSelectorMatchingLogic) setDeviceOwnerAccordingToMatchingFleets(ctx 
 		}
 		return nil
 	default:
-		// The device matches more than one fleet, set fleet conditions
-		return f.setOverlappingFleetConditions(ctx, matchingFleets)
+		// The device matches more than one fleet, don't update owner
+		return nil
 	}
 }
 
@@ -558,47 +552,6 @@ func (f FleetSelectorMatchingLogic) updateDeviceOwner(ctx context.Context, devic
 	f.log.Infof("Updating fleet of device %s from %s to %s", *device.Metadata.Name, util.DefaultIfNil(device.Metadata.Owner, "<none>"), util.DefaultIfNil(newOwnerRef, "<none>"))
 	device.Metadata.Owner = newOwnerRef
 	_, status := f.serviceHandler.ReplaceDevice(ctx, *device.Metadata.Name, lo.FromPtr(device), fieldsToNil)
-	return service.ApiStatusToErr(status)
-}
-
-// called on the device kind flow and the fleet kind flow
-func (f FleetSelectorMatchingLogic) setOverlappingFleetConditions(ctx context.Context, overlappingFleetNames []string) error {
-	if len(overlappingFleetNames) == 0 {
-		return f.setOverlappingFleetConditionFalse(ctx, f.resourceRef.Name)
-	}
-
-	errors := 0
-	for _, overlappingFleet := range overlappingFleetNames {
-		err := f.setOverlappingFleetConditionTrue(ctx, overlappingFleet)
-		if err != nil {
-			f.log.Errorf("failed updating fleet condition: %v", err)
-			errors++
-		}
-	}
-	if errors > 0 {
-		return fmt.Errorf("failed updating fleet conditions: %d", errors)
-	}
-
-	return nil
-}
-
-func (f FleetSelectorMatchingLogic) setOverlappingFleetConditionTrue(ctx context.Context, fleetName string) error {
-	condition := api.Condition{
-		Type:    api.FleetOverlappingSelectors,
-		Status:  api.ConditionStatusTrue,
-		Reason:  "Overlapping selectors",
-		Message: "Fleet's selector overlaps with at least one other fleet, causing ambiguous device ownership",
-	}
-	status := f.serviceHandler.UpdateFleetConditions(ctx, fleetName, []api.Condition{condition})
-	return service.ApiStatusToErr(status)
-}
-
-func (f FleetSelectorMatchingLogic) setOverlappingFleetConditionFalse(ctx context.Context, fleetName string) error {
-	condition := api.Condition{
-		Type:   api.FleetOverlappingSelectors,
-		Status: api.ConditionStatusFalse,
-	}
-	status := f.serviceHandler.UpdateFleetConditions(ctx, fleetName, []api.Condition{condition})
 	return service.ApiStatusToErr(status)
 }
 

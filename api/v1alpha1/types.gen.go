@@ -52,7 +52,6 @@ const (
 	DeviceSpecValid                   ConditionType = "SpecValid"
 	DeviceUpdating                    ConditionType = "Updating"
 	EnrollmentRequestApproved         ConditionType = "Approved"
-	FleetOverlappingSelectors         ConditionType = "OverlappingSelectors"
 	FleetRolloutInProgress            ConditionType = "RolloutInProgress"
 	FleetValid                        ConditionType = "Valid"
 	RepositoryAccessible              ConditionType = "Accessible"

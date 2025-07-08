@@ -38,7 +38,7 @@ spec:
               value: "true"
             {{- end }}
           volumeMounts:
-            - mountPath: /root/.flightctl-certs/
+            - mountPath: /app/certs
               name: flightctl-alertmanager-proxy-certs
             - mountPath: /root/.flightctl/config.yaml
               name: flightctl-alertmanager-proxy-config
@@ -71,8 +71,15 @@ spec:
       restartPolicy: Always
       volumes:
         - name: flightctl-alertmanager-proxy-certs
-          persistentVolumeClaim:
-            claimName: flightctl-alertmanager-proxy-certs
+          secret:
+            secretName: flightctl-alertmanager-proxy-certs
+            items:
+              - key: ca.crt
+                path: ca.crt
+              {{- if or ((.Values.global).auth).caCert .Values.auth.caCert }}
+              - key: ca_auth.crt
+                path: ca_auth.crt
+              {{- end }}
         - name: flightctl-alertmanager-proxy-config
           configMap:
             name: flightctl-alertmanager-proxy-config

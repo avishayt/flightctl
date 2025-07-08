@@ -8,7 +8,7 @@ metadata:
 data:
   config.yaml: |-
     service:
-      certStore: "/root/.flightctl-certs"
+      certStore: "/app/certs"
     {{- if not (eq .Values.global.auth.type "none") }}
     auth:
       insecureSkipTlsVerify: {{ .Values.global.auth.insecureSkipTlsVerify }}

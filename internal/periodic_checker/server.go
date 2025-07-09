@@ -81,7 +81,7 @@ func (s *Server) Run(ctx context.Context) error {
 	defer resourceSyncThread.Stop()
 
 	// device disconnected
-	deviceDisconnected := tasks.NewDeviceDisconnected(s.log, serviceHandler)
+	deviceDisconnected := tasks.NewDeviceDisconnected(s.log, serviceHandler, s.store)
 	deviceDisconnectedThread := thread.New(ctx,
 		s.log.WithField("pkg", "device-disconnected"), "Device disconnected", tasks.DeviceDisconnectedPollingInterval, deviceDisconnected.Poll)
 	deviceDisconnectedThread.Start()

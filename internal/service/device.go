@@ -509,9 +509,9 @@ func (h *ServiceHandler) GetDevicesSummary(ctx context.Context, params api.ListD
 	return result, StoreErrorToApiStatus(err, false, api.DeviceKind, nil)
 }
 
-func (h *ServiceHandler) UpdateDeviceSummaryStatusBatch(ctx context.Context, deviceNames []string, status api.DeviceSummaryStatusType, statusInfo string) api.Status {
+func (h *ServiceHandler) UpdateStatusFieldsBatch(ctx context.Context, deviceNames []string, statusUpdates map[string]store.StatusFieldUpdate) api.Status {
 	orgId := store.NullOrgId
-	err := h.store.Device().UpdateSummaryStatusBatch(ctx, orgId, deviceNames, status, statusInfo)
+	err := h.store.Device().UpdateStatusFieldsBatch(ctx, orgId, deviceNames, statusUpdates)
 	return StoreErrorToApiStatus(err, false, api.DeviceKind, nil)
 }
 

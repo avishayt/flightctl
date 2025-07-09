@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -46,8 +47,8 @@ type Device interface {
 	CountByLabels(ctx context.Context, orgId uuid.UUID, listParams ListParams, groupBy []string) ([]map[string]any, error)
 	Summary(ctx context.Context, orgId uuid.UUID, listParams ListParams) (*api.DevicesSummary, error)
 
-	// Used only by device_disconnected
-	UpdateSummaryStatusBatch(ctx context.Context, orgId uuid.UUID, deviceNames []string, status api.DeviceSummaryStatusType, statusInfo string) error
+	// Used for batch status updates
+	UpdateStatusFieldsBatch(ctx context.Context, orgId uuid.UUID, deviceNames []string, statusUpdates map[string]StatusFieldUpdate) error
 
 	// Used by fleet selector
 	ListDevicesByServiceCondition(ctx context.Context, orgId uuid.UUID, conditionType string, conditionStatus string, listParams ListParams) (*api.DeviceList, error)
@@ -65,6 +66,11 @@ type DeviceStore struct {
 type DeviceStoreCallback func(ctx context.Context, orgId uuid.UUID, before *api.Device, after *api.Device)
 type DeviceStoreValidationCallback func(ctx context.Context, before *api.Device, after *api.Device) error
 type DeviceStoreAllDeletedCallback func(ctx context.Context, orgId uuid.UUID)
+
+type StatusFieldUpdate struct {
+	Status string
+	Info   string
+}
 
 // Make sure we conform to Device interface
 var _ Device = (*DeviceStore)(nil)
@@ -517,31 +523,50 @@ func (s *DeviceStore) Summary(ctx context.Context, orgId uuid.UUID, listParams L
 	}, nil
 }
 
-func (s *DeviceStore) UpdateSummaryStatusBatch(ctx context.Context, orgId uuid.UUID, deviceNames []string, status api.DeviceSummaryStatusType, statusInfo string) error {
+func (s *DeviceStore) UpdateStatusFieldsBatch(ctx context.Context, orgId uuid.UUID, deviceNames []string, statusUpdates map[string]StatusFieldUpdate) error {
 	if len(deviceNames) == 0 {
 		return nil
 	}
 
-	tokens := strings.Repeat("?,", len(deviceNames))
-	// trim tailing comma
-	tokens = tokens[:len(tokens)-1]
+	// Build the SQL query dynamically
+	tokens := make([]string, len(deviceNames))
+	for i := range deviceNames {
+		tokens[i] = "?"
+	}
 
-	// https://www.postgresql.org/docs/current/functions-json.html
-	// jsonb_set(target jsonb, path text[], new_value jsonb, create_missing boolean)
-	createMissing := "false"
+	statusExpr := "status"
+	createMissing := "true"
+	var args []interface{}
+
+	// Add orgId as first parameter
+	args = append(args, orgId)
+
+	for field, update := range statusUpdates {
+		// JSON-encode the values and embed them directly in the query string
+		statusJSON, err := json.Marshal(update.Status)
+		if err != nil {
+			return err
+		}
+		infoJSON, err := json.Marshal(update.Info)
+		if err != nil {
+			return err
+		}
+
+		// Embed the JSON values directly in the query string instead of using parameters
+		statusExpr = fmt.Sprintf("jsonb_set(%s, '{%s,status}', '%s', %s)", statusExpr, field, string(statusJSON), createMissing)
+		statusExpr = fmt.Sprintf("jsonb_set(%s, '{%s,info}', '%s', %s)", statusExpr, field, string(infoJSON), createMissing)
+	}
+
 	query := fmt.Sprintf(`
         UPDATE devices
         SET
-            status = jsonb_set(
-                jsonb_set(status, '{summary,status}', '"%s"', %s),
-                '{summary,info}', '"%s"'
-            ),
+            status = %s,
             resource_version = resource_version + 1
-        WHERE name IN (%s)`, status, createMissing, statusInfo, tokens)
+        WHERE org_id = ? AND name IN (%s)`, statusExpr, strings.Join(tokens, ","))
 
-	args := make([]interface{}, len(deviceNames))
-	for i, name := range deviceNames {
-		args[i] = name
+	// Add device names to args
+	for _, name := range deviceNames {
+		args = append(args, name)
 	}
 
 	return s.getDB(ctx).Exec(query, args...).Error

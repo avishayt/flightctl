@@ -232,9 +232,9 @@ func (t *TracedService) GetDevicesSummary(ctx context.Context, p api.ListDevices
 	endSpan(span, st)
 	return resp, st
 }
-func (t *TracedService) UpdateDeviceSummaryStatusBatch(ctx context.Context, names []string, status api.DeviceSummaryStatusType, info string) api.Status {
-	ctx, span := startSpan(ctx, "UpdateDeviceSummaryStatusBatch")
-	st := t.inner.UpdateDeviceSummaryStatusBatch(ctx, names, status, info)
+func (t *TracedService) UpdateStatusFieldsBatch(ctx context.Context, names []string, statusUpdates map[string]store.StatusFieldUpdate) api.Status {
+	ctx, span := startSpan(ctx, "UpdateStatusFieldsBatch")
+	st := t.inner.UpdateStatusFieldsBatch(ctx, names, statusUpdates)
 	endSpan(span, st)
 	return st
 }

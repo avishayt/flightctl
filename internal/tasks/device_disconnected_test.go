@@ -75,7 +75,14 @@ func BenchmarkDeviceDisconnectedPoll(b *testing.B) {
 }
 
 func benchmarkUpdateSummaryStatusBatch(ctx context.Context, b *testing.B, log *logrus.Logger, db *gorm.DB, serviceHandler service.Service, deviceNames []string) error {
-	disconnected := NewDeviceDisconnected(log, serviceHandler)
+	// Get the store from the service handler
+	dbStore, cfg, dbName, _ := store.PrepareDBForUnitTests(ctx, log)
+	defer func() {
+		dbStore.Close()
+		store.DeleteTestDB(ctx, log, cfg, dbStore, dbName)
+	}()
+
+	disconnected := NewDeviceDisconnected(log, serviceHandler, dbStore)
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		b.StartTimer()

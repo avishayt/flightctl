@@ -35,12 +35,12 @@ spec:
               valueFrom:
                 secretKeyRef:
                   name: flightctl-db-secret
-                  key: masterPassword
+                  key: userPassword
             - name: DB_USER
               valueFrom:
                 secretKeyRef:
                   name: flightctl-db-secret
-                  key: masterUser
+                  key: user
             {{- if eq .Values.global.auth.type "none" }}
             - name: FLIGHTCTL_DISABLE_AUTH
               value: "true"

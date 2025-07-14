@@ -27,11 +27,6 @@ spec:
       {{- end }}
       containers:
         - env:
-            - name: PGPASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: flightctl-db-secret
-                  key: password
             - name: POSTGRESQL_DATABASE
               value: flightctl
             - name: POSTGRESQL_MASTER_PASSWORD

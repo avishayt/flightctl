@@ -34,12 +34,12 @@ spec:
               valueFrom:
                 secretKeyRef:
                   name: flightctl-db-secret
-                  key: masterPassword
+                  key: userPassword
             - name: DB_USER
               valueFrom:
                 secretKeyRef:
                   name: flightctl-db-secret
-                  key: masterUser
+                  key: user
             {{- if .Values.periodic.env }}
             {{- range $key, $value := .Values.periodic.env }}
             - name: {{ $key }}

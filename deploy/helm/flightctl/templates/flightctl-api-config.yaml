@@ -7,10 +7,16 @@ metadata:
 data:
   config.yaml: |-
     database:
-        hostname: flightctl-db.{{ default .Release.Namespace .Values.global.internalNamespace }}.svc.cluster.local
+        hostname: {{ include "flightctl.dbHostname" . }}
         type: pgsql
-        port: 5432
-        name: flightctl
+        port: {{ include "flightctl.dbPort" . }}
+        name: {{ include "flightctl.dbName" . }}
+        {{- if not .Values.db.enabled }}
+        {{- $sslParams := include "flightctl.dbSslParams" . }}
+        {{- if $sslParams }}
+        sslParams: {{ $sslParams }}
+        {{- end }}
+        {{- end }}
     service:
         address: :3443
         agentEndpointAddress: :7443

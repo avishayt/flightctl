@@ -1,3 +1,4 @@
+{{ if .Values.db.enabled }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -32,22 +33,22 @@ spec:
             - name: POSTGRESQL_MASTER_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: flightctl-db-secret
+                  name: {{ include "flightctl.dbSecretName" . }}
                   key: masterPassword
             - name: POSTGRESQL_MASTER_USER
               valueFrom:
                 secretKeyRef:
-                  name: flightctl-db-secret
+                  name: {{ include "flightctl.dbSecretName" . }}
                   key: masterUser
             - name: POSTGRESQL_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: flightctl-db-secret
+                  name: {{ include "flightctl.dbSecretName" . }}
                   key: userPassword
             - name: POSTGRESQL_USER
               valueFrom:
                 secretKeyRef:
-                  name: flightctl-db-secret
+                  name: {{ include "flightctl.dbSecretName" . }}
                   key: user
             - name: POSTGRESQL_MAX_CONNECTIONS
               value: {{ .Values.db.maxConnections | quote }}
@@ -75,3 +76,4 @@ spec:
         - name: init-scripts
           configMap:
             name: flightctl-db
+{{ end }}

@@ -83,6 +83,38 @@ global:
 ## @descriptionEnd
 
 db:
+  # Enable/disable the built-in PostgreSQL database
+  # Set to false to use an external database
+  enabled: true
+  
+  # External database configuration (used when enabled: false)
+  external:
+    # External database host
+    hostname: ""
+    # External database port
+    port: 5432
+    # External database name
+    name: "flightctl"
+    # External database connection SSL mode (disable, require, verify-ca, verify-full)
+    sslMode: "require"
+    # External database connection SSL cert (optional)
+    sslCert: ""
+    # External database connection SSL key (optional)
+    sslKey: ""
+    # External database connection SSL root cert (optional)
+    sslRootCert: ""
+    # External database users
+    masterUser: "flightctl_admin"
+    user: "flightctl_app"
+    migrationUser: "flightctl_migrator"
+    # External database passwords - leave empty to use existing secrets
+    masterPassword: ""
+    userPassword: ""
+    migrationPassword: ""
+    # External database secret name (optional - defaults to flightctl-db-secret)
+    secretName: ""
+  
+  # Built-in database configuration (used when enabled: true)
   image:
     image: quay.io/sclorg/postgresql-16-c9s
     tag: "20250214"

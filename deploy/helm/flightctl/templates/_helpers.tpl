@@ -120,3 +120,100 @@ Generates a random alphanumeric password in the format xxxxx-xxxxx-xxxxx-xxxxx.
 {{- $pass := printf "%s-%s-%s-%s" (substr 0 5 $password) (substr 5 10 $password) (substr 10 15 $password) (substr 15 20 $password) }}
 {{- print ($pass | b64enc) }}
 {{- end }}
+
+{{/*
+Database hostname helper
+*/}}
+{{- define "flightctl.dbHostname" }}
+{{- if .Values.db.enabled }}
+{{- printf "flightctl-db.%s.svc.cluster.local" (default .Release.Namespace .Values.global.internalNamespace) }}
+{{- else }}
+{{- printf .Values.db.external.hostname }}
+{{- end }}
+{{- end }}
+
+{{/*
+Database port helper
+*/}}
+{{- define "flightctl.dbPort" }}
+{{- if .Values.db.enabled }}
+{{- printf "5432" }}
+{{- else }}
+{{- printf "%v" .Values.db.external.port }}
+{{- end }}
+{{- end }}
+
+{{/*
+Database name helper
+*/}}
+{{- define "flightctl.dbName" }}
+{{- if .Values.db.enabled }}
+{{- printf "flightctl" }}
+{{- else }}
+{{- printf .Values.db.external.name }}
+{{- end }}
+{{- end }}
+
+{{/*
+Database master user helper
+*/}}
+{{- define "flightctl.dbMasterUser" }}
+{{- if .Values.db.enabled }}
+{{- printf .Values.db.masterUser }}
+{{- else }}
+{{- printf .Values.db.external.masterUser }}
+{{- end }}
+{{- end }}
+
+{{/*
+Database app user helper
+*/}}
+{{- define "flightctl.dbUser" }}
+{{- if .Values.db.enabled }}
+{{- printf .Values.db.user }}
+{{- else }}
+{{- printf .Values.db.external.user }}
+{{- end }}
+{{- end }}
+
+{{/*
+Database migration user helper
+*/}}
+{{- define "flightctl.dbMigrationUser" }}
+{{- if .Values.db.enabled }}
+{{- printf "flightctl_migrator" }}
+{{- else }}
+{{- printf .Values.db.external.migrationUser }}
+{{- end }}
+{{- end }}
+
+{{/*
+Database secret name helper
+*/}}
+{{- define "flightctl.dbSecretName" }}
+{{- if and (not .Values.db.enabled) .Values.db.external.secretName }}
+{{- printf .Values.db.external.secretName }}
+{{- else }}
+{{- printf "flightctl-db-secret" }}
+{{- end }}
+{{- end }}
+
+{{/*
+SSL connection parameters for external database
+*/}}
+{{- define "flightctl.dbSslParams" }}
+{{- if not .Values.db.enabled }}
+{{- $sslMode := .Values.db.external.sslMode | default "require" }}
+{{- $params := list (printf "sslmode=%s" $sslMode) }}
+{{- if .Values.db.external.sslCert }}
+{{- $params = append $params (printf "sslcert=%s" .Values.db.external.sslCert) }}
+{{- end }}
+{{- if .Values.db.external.sslKey }}
+{{- $params = append $params (printf "sslkey=%s" .Values.db.external.sslKey) }}
+{{- end }}
+{{- if .Values.db.external.sslRootCert }}
+{{- $params = append $params (printf "sslrootcert=%s" .Values.db.external.sslRootCert) }}
+{{- end }}
+{{- join "&" $params }}
+{{- end }}
+{{- end }}

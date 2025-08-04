@@ -5541,6 +5541,7 @@ components:
             - DeviceSpecValid
             - DeviceSpecInvalid
             - InternalTaskFailed
+            - ReferencedRepositoryUpdated
             - RepositoryAccessible
             - RepositoryInaccessible
             - FleetRolloutStarted
@@ -5628,6 +5629,7 @@ components:
           InternalTaskFailed: "#/components/schemas/InternalTaskFailedDetails"
           ResourceSyncCompleted: "#/components/schemas/ResourceSyncCompletedDetails"
           FleetRolloutStarted: "#/components/schemas/FleetRolloutStartedDetails"
+          ReferencedRepositoryUpdated: "#/components/schemas/ReferencedRepositoryUpdatedDetails"
       oneOf:
         - $ref: "#/components/schemas/ResourceUpdatedDetails"
         - $ref: "#/components/schemas/DeviceOwnershipChangedDetails"
@@ -5636,6 +5638,7 @@ components:
         - $ref: "#/components/schemas/InternalTaskFailedDetails"
         - $ref: "#/components/schemas/ResourceSyncCompletedDetails"
         - $ref: "#/components/schemas/FleetRolloutStartedDetails"
+        - $ref: "#/components/schemas/ReferencedRepositoryUpdatedDetails"
     ResourceUpdatedDetails:
       type: object
       required:
@@ -5650,7 +5653,7 @@ components:
           type: array
           items:
             type: string
-            enum: [owner, labels, spec]
+            enum: [owner, labels, spec, spec.selector, spec.template]
           description: List of fields that were updated in the resource.
         previousOwner:
           type: string
@@ -5735,11 +5738,9 @@ components:
         retryCount:
           type: integer
           description: Number of times the task has been retried.
-        taskParameters:
-          type: object
-          additionalProperties:
-            type: string
-          description: Parameters needed to retry the task.
+        originalEventJson:
+          type: string
+          description: The original event that triggered the internal task, serialized as JSON.
     ResourceSyncCompletedDetails:
       type: object
       required:
@@ -5766,7 +5767,7 @@ components:
       required:
         - detailType
         - templateVersion
-        - isImmediate
+        - rolloutStrategy
       properties:
         detailType:
           type: string
@@ -5775,10 +5776,23 @@ components:
         templateVersion:
           type: string
           description: The name of the TemplateVersion that is rolling out.
-        isImmediate:
+        rolloutStrategy:
           type: string
           enum: [batched, immediate]
           description: Rollout strategy type.
+    ReferencedRepositoryUpdatedDetails:
+      type: object
+      required:
+        - detailType
+        - repositoryName
+      properties:
+        detailType:
+          type: string
+          enum: [ReferencedRepositoryUpdated]
+          description: The type of detail for discriminator purposes.
+        repositoryName:
+          type: string
+          description: The name of the repository that was updated.
     Organization:
       type: object
       required:

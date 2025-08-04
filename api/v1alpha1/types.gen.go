@@ -185,6 +185,7 @@ const (
 	EventReasonFleetRolloutCreated             EventReason = "FleetRolloutCreated"
 	EventReasonFleetRolloutStarted             EventReason = "FleetRolloutStarted"
 	EventReasonInternalTaskFailed              EventReason = "InternalTaskFailed"
+	EventReasonReferencedRepositoryUpdated     EventReason = "ReferencedRepositoryUpdated"
 	EventReasonRepositoryAccessible            EventReason = "RepositoryAccessible"
 	EventReasonRepositoryInaccessible          EventReason = "RepositoryInaccessible"
 	EventReasonResourceCreated                 EventReason = "ResourceCreated"
@@ -220,10 +221,10 @@ const (
 	FleetRolloutStarted FleetRolloutStartedDetailsDetailType = "FleetRolloutStarted"
 )
 
-// Defines values for FleetRolloutStartedDetailsIsImmediate.
+// Defines values for FleetRolloutStartedDetailsRolloutStrategy.
 const (
-	Batched   FleetRolloutStartedDetailsIsImmediate = "batched"
-	Immediate FleetRolloutStartedDetailsIsImmediate = "immediate"
+	Batched   FleetRolloutStartedDetailsRolloutStrategy = "batched"
+	Immediate FleetRolloutStartedDetailsRolloutStrategy = "immediate"
 )
 
 // Defines values for ImagePullPolicy.
@@ -251,6 +252,11 @@ const (
 	Add     PatchRequestOp = "add"
 	Remove  PatchRequestOp = "remove"
 	Replace PatchRequestOp = "replace"
+)
+
+// Defines values for ReferencedRepositoryUpdatedDetailsDetailType.
+const (
+	ReferencedRepositoryUpdated ReferencedRepositoryUpdatedDetailsDetailType = "ReferencedRepositoryUpdated"
 )
 
 // Defines values for RepoSpecType.
@@ -289,9 +295,11 @@ const (
 
 // Defines values for ResourceUpdatedDetailsUpdatedFields.
 const (
-	Labels ResourceUpdatedDetailsUpdatedFields = "labels"
-	Owner  ResourceUpdatedDetailsUpdatedFields = "owner"
-	Spec   ResourceUpdatedDetailsUpdatedFields = "spec"
+	Labels       ResourceUpdatedDetailsUpdatedFields = "labels"
+	Owner        ResourceUpdatedDetailsUpdatedFields = "owner"
+	Spec         ResourceUpdatedDetailsUpdatedFields = "spec"
+	SpecSelector ResourceUpdatedDetailsUpdatedFields = "spec.selector"
+	SpecTemplate ResourceUpdatedDetailsUpdatedFields = "spec.template"
 )
 
 // Defines values for RolloutStrategy.
@@ -1182,8 +1190,8 @@ type FleetRolloutStartedDetails struct {
 	// DetailType The type of detail for discriminator purposes.
 	DetailType FleetRolloutStartedDetailsDetailType `json:"detailType"`
 
-	// IsImmediate Rollout strategy type.
-	IsImmediate FleetRolloutStartedDetailsIsImmediate `json:"isImmediate"`
+	// RolloutStrategy Rollout strategy type.
+	RolloutStrategy FleetRolloutStartedDetailsRolloutStrategy `json:"rolloutStrategy"`
 
 	// TemplateVersion The name of the TemplateVersion that is rolling out.
 	TemplateVersion string `json:"templateVersion"`
@@ -1192,8 +1200,8 @@ type FleetRolloutStartedDetails struct {
 // FleetRolloutStartedDetailsDetailType The type of detail for discriminator purposes.
 type FleetRolloutStartedDetailsDetailType string
 
-// FleetRolloutStartedDetailsIsImmediate Rollout strategy type.
-type FleetRolloutStartedDetailsIsImmediate string
+// FleetRolloutStartedDetailsRolloutStrategy Rollout strategy type.
+type FleetRolloutStartedDetailsRolloutStrategy string
 
 // FleetRolloutStatus FleetRolloutStatus represents information about the status of a fleet rollout.
 type FleetRolloutStatus struct {
@@ -1407,11 +1415,11 @@ type InternalTaskFailedDetails struct {
 	// ErrorMessage The error message describing the failure.
 	ErrorMessage string `json:"errorMessage"`
 
+	// OriginalEventJson The original event that triggered the internal task, serialized as JSON.
+	OriginalEventJson *string `json:"originalEventJson,omitempty"`
+
 	// RetryCount Number of times the task has been retried.
 	RetryCount *int `json:"retryCount,omitempty"`
-
-	// TaskParameters Parameters needed to retry the task.
-	TaskParameters *map[string]string `json:"taskParameters,omitempty"`
 
 	// TaskType The type of internal task that failed.
 	TaskType string `json:"taskType"`
@@ -1581,6 +1589,18 @@ type PatchRequestOp string
 
 // Percentage Percentage is the string format representing percentage string.
 type Percentage = string
+
+// ReferencedRepositoryUpdatedDetails defines model for ReferencedRepositoryUpdatedDetails.
+type ReferencedRepositoryUpdatedDetails struct {
+	// DetailType The type of detail for discriminator purposes.
+	DetailType ReferencedRepositoryUpdatedDetailsDetailType `json:"detailType"`
+
+	// RepositoryName The name of the repository that was updated.
+	RepositoryName string `json:"repositoryName"`
+}
+
+// ReferencedRepositoryUpdatedDetailsDetailType The type of detail for discriminator purposes.
+type ReferencedRepositoryUpdatedDetailsDetailType string
 
 // RelativePath Represents a relative file path.
 type RelativePath struct {
@@ -2870,6 +2890,34 @@ func (t *EventDetails) MergeFleetRolloutStartedDetails(v FleetRolloutStartedDeta
 	return err
 }
 
+// AsReferencedRepositoryUpdatedDetails returns the union data inside the EventDetails as a ReferencedRepositoryUpdatedDetails
+func (t EventDetails) AsReferencedRepositoryUpdatedDetails() (ReferencedRepositoryUpdatedDetails, error) {
+	var body ReferencedRepositoryUpdatedDetails
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromReferencedRepositoryUpdatedDetails overwrites any union data inside the EventDetails as the provided ReferencedRepositoryUpdatedDetails
+func (t *EventDetails) FromReferencedRepositoryUpdatedDetails(v ReferencedRepositoryUpdatedDetails) error {
+	v.DetailType = "ReferencedRepositoryUpdated"
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeReferencedRepositoryUpdatedDetails performs a merge with any union data inside the EventDetails, using the provided ReferencedRepositoryUpdatedDetails
+func (t *EventDetails) MergeReferencedRepositoryUpdatedDetails(v ReferencedRepositoryUpdatedDetails) error {
+	v.DetailType = "ReferencedRepositoryUpdated"
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
 func (t EventDetails) Discriminator() (string, error) {
 	var discriminator struct {
 		Discriminator string `json:"detailType"`
@@ -2894,6 +2942,8 @@ func (t EventDetails) ValueByDiscriminator() (interface{}, error) {
 		return t.AsFleetRolloutStartedDetails()
 	case "InternalTaskFailed":
 		return t.AsInternalTaskFailedDetails()
+	case "ReferencedRepositoryUpdated":
+		return t.AsReferencedRepositoryUpdatedDetails()
 	case "ResourceSyncCompleted":
 		return t.AsResourceSyncCompletedDetails()
 	case "ResourceUpdated":

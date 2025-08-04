@@ -55,10 +55,11 @@ func (t *workerClient) EmitEvent(ctx context.Context, event *api.Event) {
 
 // eventReasons contains all event reasons that should be sent to the workers
 var eventReasons = map[api.EventReason]struct{}{
-	api.EventReasonResourceCreated:     {},
-	api.EventReasonResourceUpdated:     {},
-	api.EventReasonResourceDeleted:     {},
-	api.EventReasonFleetRolloutStarted: {},
+	api.EventReasonResourceCreated:             {},
+	api.EventReasonResourceUpdated:             {},
+	api.EventReasonResourceDeleted:             {},
+	api.EventReasonFleetRolloutStarted:         {},
+	api.EventReasonReferencedRepositoryUpdated: {},
 }
 
 func shouldEmitEvent(reason api.EventReason) bool {

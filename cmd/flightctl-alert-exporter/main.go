@@ -10,6 +10,7 @@ import (
 	"github.com/flightctl/flightctl/internal/kvstore"
 	"github.com/flightctl/flightctl/internal/service"
 	"github.com/flightctl/flightctl/internal/store"
+	"github.com/flightctl/flightctl/internal/worker_client"
 	"github.com/flightctl/flightctl/pkg/log"
 	"github.com/flightctl/flightctl/pkg/queues"
 	"github.com/sirupsen/logrus"
@@ -58,12 +59,18 @@ func main() {
 	}
 	defer queuesProvider.Stop()
 
+	publisher, err := worker_client.QueuePublisher(queuesProvider)
+	if err != nil {
+		log.Fatalf("initializing queue publisher: %v", err)
+	}
+	workerClient := worker_client.NewWorkerClient(publisher, log)
+
 	kvStore, err := kvstore.NewKVStore(ctx, log, cfg.KV.Hostname, cfg.KV.Port, cfg.KV.Password)
 	if err != nil {
 		log.Fatalf("initializing kv store: %v", err)
 	}
 
-	serviceHandler := service.WrapWithTracing(service.NewServiceHandler(store, kvStore, nil, log, "", ""))
+	serviceHandler := service.WrapWithTracing(service.NewServiceHandler(store, workerClient, kvStore, nil, log, "", ""))
 
 	server := alert_exporter.New(cfg, log)
 	if err := server.Run(ctx, serviceHandler); err != nil {

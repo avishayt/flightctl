@@ -7,6 +7,7 @@ import (
 
 	api "github.com/flightctl/flightctl/api/v1alpha1"
 	"github.com/flightctl/flightctl/internal/service"
+	servicecommon "github.com/flightctl/flightctl/internal/service/common"
 	"github.com/flightctl/flightctl/internal/tasks_client"
 	"github.com/sirupsen/logrus"
 )
@@ -23,8 +24,8 @@ import (
 // being sent again, which is safe and intended. No persistent state is modified,
 // and the callbacks themselves are assumed to be idempotent or safely repeatable.
 
-func repositoryUpdate(ctx context.Context, resourceRef *tasks_client.ResourceReference, serviceHandler service.Service, callbackManager tasks_client.CallbackManager, log logrus.FieldLogger) error {
-	logic := NewRepositoryUpdateLogic(callbackManager, log, serviceHandler, *resourceRef)
+func repositoryUpdate(ctx context.Context, resourceRef *tasks_client.ResourceReference, serviceHandler service.Service, log logrus.FieldLogger) error {
+	logic := NewRepositoryUpdateLogic(log, serviceHandler, *resourceRef)
 
 	switch {
 	case resourceRef.Op == tasks_client.RepositoryUpdateOpUpdate && resourceRef.Kind == api.RepositoryKind:
@@ -39,14 +40,13 @@ func repositoryUpdate(ctx context.Context, resourceRef *tasks_client.ResourceRef
 }
 
 type RepositoryUpdateLogic struct {
-	callbackManager tasks_client.CallbackManager
-	log             logrus.FieldLogger
-	serviceHandler  service.Service
-	resourceRef     tasks_client.ResourceReference
+	log            logrus.FieldLogger
+	serviceHandler service.Service
+	resourceRef    tasks_client.ResourceReference
 }
 
-func NewRepositoryUpdateLogic(callbackManager tasks_client.CallbackManager, log logrus.FieldLogger, serviceHandler service.Service, resourceRef tasks_client.ResourceReference) RepositoryUpdateLogic {
-	return RepositoryUpdateLogic{callbackManager: callbackManager, log: log, serviceHandler: serviceHandler, resourceRef: resourceRef}
+func NewRepositoryUpdateLogic(log logrus.FieldLogger, serviceHandler service.Service, resourceRef tasks_client.ResourceReference) RepositoryUpdateLogic {
+	return RepositoryUpdateLogic{log: log, serviceHandler: serviceHandler, resourceRef: resourceRef}
 }
 
 func (t *RepositoryUpdateLogic) HandleRepositoryUpdate(ctx context.Context) error {
@@ -56,7 +56,7 @@ func (t *RepositoryUpdateLogic) HandleRepositoryUpdate(ctx context.Context) erro
 	}
 
 	for _, fleet := range fleets.Items {
-		t.callbackManager.FleetSourceUpdated(ctx, t.resourceRef.OrgID, *fleet.Metadata.Name)
+		t.serviceHandler.CreateEvent(ctx, servicecommon.GetReferencedRepositoryUpdatedEvent(ctx, api.FleetKind, *fleet.Metadata.Name, t.resourceRef.Name))
 	}
 
 	devices, status := t.serviceHandler.GetRepositoryDeviceReferences(ctx, t.resourceRef.Name)
@@ -65,7 +65,7 @@ func (t *RepositoryUpdateLogic) HandleRepositoryUpdate(ctx context.Context) erro
 	}
 
 	for _, device := range devices.Items {
-		t.callbackManager.DeviceSourceUpdated(ctx, t.resourceRef.OrgID, *device.Metadata.Name)
+		t.serviceHandler.CreateEvent(ctx, servicecommon.GetReferencedRepositoryUpdatedEvent(ctx, api.DeviceKind, *device.Metadata.Name, t.resourceRef.Name))
 	}
 
 	return nil

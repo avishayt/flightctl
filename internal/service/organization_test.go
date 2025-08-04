@@ -16,7 +16,7 @@ import (
 func createServiceHandlerWithOrgMockStore(t *testing.T) (*ServiceHandler, *TestStore) {
 	mockStore := &TestStore{}
 	handler := &ServiceHandler{
-		EventHandler: NewEventHandler(mockStore, log.InitLogs()),
+		EventHandler: NewEventHandler(mockStore, log.InitLogs(), &DummyWorkerClient{}),
 		store:        mockStore,
 	}
 	return handler, mockStore

@@ -8,7 +8,6 @@ import (
 
 	api "github.com/flightctl/flightctl/api/v1alpha1"
 	"github.com/flightctl/flightctl/internal/service"
-	"github.com/flightctl/flightctl/internal/tasks_client"
 	"github.com/flightctl/flightctl/internal/util"
 	"github.com/flightctl/flightctl/pkg/k8sclient"
 	"github.com/sirupsen/logrus"
@@ -29,37 +28,36 @@ import (
 // This design avoids unnecessary object creation, ensures consistency, and allows
 // safe reprocessing of the task without side effects.
 
-func fleetValidate(ctx context.Context, resourceRef *tasks_client.ResourceReference, serviceHandler service.Service, callbackManager tasks_client.CallbackManager, k8sClient k8sclient.K8SClient, log logrus.FieldLogger) error {
-	logic := NewFleetValidateLogic(callbackManager, log, serviceHandler, k8sClient, *resourceRef)
+func fleetValidate(ctx context.Context, event api.Event, serviceHandler service.Service, k8sClient k8sclient.K8SClient, log logrus.FieldLogger) error {
+	logic := NewFleetValidateLogic(log, serviceHandler, k8sClient, event)
 	switch {
-	case resourceRef.Op == tasks_client.FleetValidateOpUpdate && resourceRef.Kind == api.FleetKind:
+	case event.InvolvedObject.Kind == api.FleetKind:
 		err := logic.CreateNewTemplateVersionIfFleetValid(ctx)
 		if err != nil {
-			log.Errorf("failed validating fleet %s/%s: %v", resourceRef.OrgID, resourceRef.Name, err)
+			log.Errorf("failed validating fleet %s/%s: %v", api.NullOrgId, event.InvolvedObject.Name, err)
 		}
 	default:
-		log.Errorf("FleetValidate called with unexpected kind %s and op %s", resourceRef.Kind, resourceRef.Op)
+		log.Errorf("FleetValidate called with unexpected kind %s and op %s", event.InvolvedObject.Kind, event.Reason)
 	}
 	return nil
 }
 
 type FleetValidateLogic struct {
-	callbackManager tasks_client.CallbackManager
-	log             logrus.FieldLogger
-	serviceHandler  service.Service
-	k8sClient       k8sclient.K8SClient
-	resourceRef     tasks_client.ResourceReference
-	templateConfig  *[]api.ConfigProviderSpec
+	log            logrus.FieldLogger
+	serviceHandler service.Service
+	k8sClient      k8sclient.K8SClient
+	event          api.Event
+	templateConfig *[]api.ConfigProviderSpec
 }
 
-func NewFleetValidateLogic(callbackManager tasks_client.CallbackManager, log logrus.FieldLogger, serviceHandler service.Service, k8sClient k8sclient.K8SClient, resourceRef tasks_client.ResourceReference) FleetValidateLogic {
-	return FleetValidateLogic{callbackManager: callbackManager, log: log, serviceHandler: serviceHandler, k8sClient: k8sClient, resourceRef: resourceRef}
+func NewFleetValidateLogic(log logrus.FieldLogger, serviceHandler service.Service, k8sClient k8sclient.K8SClient, event api.Event) FleetValidateLogic {
+	return FleetValidateLogic{log: log, serviceHandler: serviceHandler, k8sClient: k8sClient, event: event}
 }
 
 func (t *FleetValidateLogic) CreateNewTemplateVersionIfFleetValid(ctx context.Context) error {
-	fleet, status := t.serviceHandler.GetFleet(ctx, t.resourceRef.Name, api.GetFleetParams{})
+	fleet, status := t.serviceHandler.GetFleet(ctx, t.event.InvolvedObject.Name, api.GetFleetParams{})
 	if status.Code != http.StatusOK {
-		return fmt.Errorf("failed getting fleet %s/%s: %s", t.resourceRef.OrgID, t.resourceRef.Name, status.Message)
+		return fmt.Errorf("failed getting fleet %s/%s: %s", api.NullOrgId, t.event.InvolvedObject.Name, status.Message)
 	}
 
 	templateVersionName := generateTemplateVersionName(fleet)
@@ -125,9 +123,9 @@ func (t *FleetValidateLogic) setStatus(ctx context.Context, validationErr error)
 		condition.Message = validationErr.Error()
 	}
 
-	status := t.serviceHandler.UpdateFleetConditions(ctx, t.resourceRef.Name, []api.Condition{condition})
+	status := t.serviceHandler.UpdateFleetConditions(ctx, t.event.InvolvedObject.Name, []api.Condition{condition})
 	if status.Code != http.StatusOK {
-		t.log.Errorf("Failed setting condition for fleet %s/%s: %s", t.resourceRef.OrgID, t.resourceRef.Name, status.Message)
+		t.log.Errorf("Failed setting condition for fleet %s/%s: %s", api.NullOrgId, t.event.InvolvedObject.Name, status.Message)
 	}
 	return validationErr
 }
@@ -197,7 +195,7 @@ func (t *FleetValidateLogic) validateGitConfig(ctx context.Context, configItem *
 
 	repo, status := t.serviceHandler.GetRepository(ctx, gitSpec.GitRef.Repository)
 	if status.Code != http.StatusOK {
-		return &gitSpec.Name, &gitSpec.GitRef.Repository, fmt.Errorf("failed fetching specified Repository definition %s/%s: %s", t.resourceRef.OrgID, gitSpec.GitRef.Repository, status.Message)
+		return &gitSpec.Name, &gitSpec.GitRef.Repository, fmt.Errorf("failed fetching specified Repository definition %s/%s: %s", api.NullOrgId, gitSpec.GitRef.Repository, status.Message)
 	}
 	_, err = repo.Spec.GetRepoURL()
 	if err != nil {
@@ -241,7 +239,7 @@ func (t *FleetValidateLogic) validateHttpProviderConfig(ctx context.Context, con
 
 	repo, status := t.serviceHandler.GetRepository(ctx, httpConfigProviderSpec.HttpRef.Repository)
 	if status.Code != http.StatusOK {
-		return &httpConfigProviderSpec.Name, &httpConfigProviderSpec.HttpRef.Repository, fmt.Errorf("failed fetching specified Repository definition %s/%s: %s", t.resourceRef.OrgID, httpConfigProviderSpec.HttpRef.Repository, status.Message)
+		return &httpConfigProviderSpec.Name, &httpConfigProviderSpec.HttpRef.Repository, fmt.Errorf("failed fetching specified Repository definition %s/%s: %s", api.NullOrgId, httpConfigProviderSpec.HttpRef.Repository, status.Message)
 	}
 	_, err = repo.Spec.GetRepoURL()
 	if err != nil {

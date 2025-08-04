@@ -10,6 +10,7 @@ import (
 	"github.com/flightctl/flightctl/internal/flterrors"
 	"github.com/flightctl/flightctl/internal/store"
 	"github.com/flightctl/flightctl/internal/store/model"
+	"github.com/flightctl/flightctl/internal/worker_client"
 	"github.com/google/uuid"
 	"github.com/samber/lo"
 )
@@ -529,6 +530,18 @@ func (s *DummyOrganization) List(ctx context.Context) ([]*model.Organization, er
 	}
 	return *s.organizations, nil
 }
+
+// --------------------------------------> WorkerClient
+
+type DummyWorkerClient struct {
+	workerClient worker_client.WorkerClient
+}
+
+func (s *DummyWorkerClient) EmitEvent(ctx context.Context, event *api.Event) {
+	// TODO: implement
+}
+
+// --------------------------------------> Helper functions
 
 func deepCopy(src, dst interface{}) {
 	data, err := json.Marshal(src)

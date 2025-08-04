@@ -41,12 +41,12 @@ import (
 //
 // This design ensures the task can be run repeatedly without side effects.
 
-func fleetRollout(ctx context.Context, resourceRef *tasks_client.ResourceReference, serviceHandler service.Service, callbackManager tasks_client.CallbackManager, log logrus.FieldLogger) error {
+func fleetRollout(ctx context.Context, resourceRef *tasks_client.ResourceReference, serviceHandler service.Service, log logrus.FieldLogger) error {
 	if resourceRef.Op != tasks_client.FleetRolloutOpUpdate {
 		log.Errorf("received unknown op %s", resourceRef.Op)
 		return nil
 	}
-	logic := NewFleetRolloutsLogic(callbackManager, log, serviceHandler, *resourceRef)
+	logic := NewFleetRolloutsLogic(log, serviceHandler, *resourceRef)
 	switch resourceRef.Kind {
 	case api.FleetKind:
 		err := logic.RolloutFleet(ctx)
@@ -66,21 +66,19 @@ func fleetRollout(ctx context.Context, resourceRef *tasks_client.ResourceReferen
 }
 
 type FleetRolloutsLogic struct {
-	callbackManager tasks_client.CallbackManager
-	log             logrus.FieldLogger
-	serviceHandler  service.Service
-	resourceRef     tasks_client.ResourceReference
-	itemsPerPage    int
-	owner           string
+	log            logrus.FieldLogger
+	serviceHandler service.Service
+	resourceRef    tasks_client.ResourceReference
+	itemsPerPage   int
+	owner          string
 }
 
-func NewFleetRolloutsLogic(callbackManager tasks_client.CallbackManager, log logrus.FieldLogger, serviceHandler service.Service, resourceRef tasks_client.ResourceReference) FleetRolloutsLogic {
+func NewFleetRolloutsLogic(log logrus.FieldLogger, serviceHandler service.Service, resourceRef tasks_client.ResourceReference) FleetRolloutsLogic {
 	return FleetRolloutsLogic{
-		callbackManager: callbackManager,
-		log:             log,
-		serviceHandler:  serviceHandler,
-		resourceRef:     resourceRef,
-		itemsPerPage:    ItemsPerPage,
+		log:            log,
+		serviceHandler: serviceHandler,
+		resourceRef:    resourceRef,
+		itemsPerPage:   ItemsPerPage,
 	}
 }
 

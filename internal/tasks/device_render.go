@@ -14,7 +14,6 @@ import (
 	api "github.com/flightctl/flightctl/api/v1alpha1"
 	"github.com/flightctl/flightctl/internal/kvstore"
 	"github.com/flightctl/flightctl/internal/service"
-	"github.com/flightctl/flightctl/internal/tasks_client"
 	"github.com/flightctl/flightctl/internal/util"
 	"github.com/flightctl/flightctl/pkg/ignition"
 	"github.com/flightctl/flightctl/pkg/k8sclient"
@@ -40,8 +39,8 @@ import (
 // This design ensures the task can be retried safely, detects mid-write inconsistencies,
 // and avoids unnecessary reprocessing when the output is already up to date.
 
-func deviceRender(ctx context.Context, resourceRef *tasks_client.ResourceReference, serviceHandler service.Service, callbackManager tasks_client.CallbackManager, k8sClient k8sclient.K8SClient, kvStore kvstore.KVStore, log logrus.FieldLogger) error {
-	logic := NewDeviceRenderLogic(callbackManager, log, serviceHandler, k8sClient, kvStore, *resourceRef)
+func deviceRender(ctx context.Context, resourceRef *tasks_client.ResourceReference, serviceHandler service.Service, k8sClient k8sclient.K8SClient, kvStore kvstore.KVStore, log logrus.FieldLogger) error {
+	logic := NewDeviceRenderLogic(log, serviceHandler, k8sClient, kvStore, *resourceRef)
 	if resourceRef.Op == tasks_client.DeviceRenderOpUpdate {
 		err := logic.RenderDevice(ctx)
 		if err != nil {
@@ -56,7 +55,6 @@ func deviceRender(ctx context.Context, resourceRef *tasks_client.ResourceReferen
 }
 
 type DeviceRenderLogic struct {
-	callbackManager tasks_client.CallbackManager
 	log             logrus.FieldLogger
 	serviceHandler  service.Service
 	k8sClient       k8sclient.K8SClient
@@ -68,8 +66,8 @@ type DeviceRenderLogic struct {
 	applications    *[]api.ApplicationProviderSpec
 }
 
-func NewDeviceRenderLogic(callbackManager tasks_client.CallbackManager, log logrus.FieldLogger, serviceHandler service.Service, k8sClient k8sclient.K8SClient, kvStore kvstore.KVStore, resourceRef tasks_client.ResourceReference) DeviceRenderLogic {
-	return DeviceRenderLogic{callbackManager: callbackManager, log: log, serviceHandler: serviceHandler, k8sClient: k8sClient, kvStore: kvStore, resourceRef: resourceRef}
+func NewDeviceRenderLogic(log logrus.FieldLogger, serviceHandler service.Service, k8sClient k8sclient.K8SClient, kvStore kvstore.KVStore, resourceRef tasks_client.ResourceReference) DeviceRenderLogic {
+	return DeviceRenderLogic{log: log, serviceHandler: serviceHandler, k8sClient: k8sClient, kvStore: kvStore, resourceRef: resourceRef}
 }
 
 func (t *DeviceRenderLogic) RenderDevice(ctx context.Context) error {

@@ -86,7 +86,7 @@ func (h *ServiceHandler) createDeviceFromEnrollmentRequest(ctx context.Context, 
 	}
 	common.UpdateServiceSideStatus(ctx, orgId, apiResource, h.store, h.log)
 
-	_, err := h.store.Device().Create(ctx, orgId, apiResource, h.callbackManager.DeviceUpdatedCallback, h.callbackDeviceUpdated)
+	_, err := h.store.Device().Create(ctx, orgId, apiResource, h.callbackDeviceUpdated)
 	return err
 }
 

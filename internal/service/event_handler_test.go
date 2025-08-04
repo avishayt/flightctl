@@ -27,10 +27,9 @@ import (
 func serviceHandler() *ServiceHandler {
 	testStore := &TestStore{}
 	return &ServiceHandler{
-		EventHandler:    NewEventHandler(testStore, logrus.New()),
-		store:           testStore,
-		callbackManager: dummyCallbackManager(),
-		log:             logrus.New(),
+		EventHandler: NewEventHandler(testStore, logrus.New()),
+		store:        testStore,
+		log:          logrus.New(),
 	}
 }
 

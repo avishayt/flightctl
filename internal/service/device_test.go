@@ -46,12 +46,11 @@ func testDevicePatch(require *require.Assertions, patch api.PatchRequest) (*api.
 		Status: &status,
 	}
 	serviceHandler := ServiceHandler{
-		EventHandler:    NewEventHandler(&TestStore{}, log.InitLogs()),
-		store:           &TestStore{},
-		callbackManager: dummyCallbackManager(),
+		EventHandler: NewEventHandler(&TestStore{}, log.InitLogs()),
+		store:        &TestStore{},
 	}
 	ctx := context.Background()
-	_, err := serviceHandler.store.Device().Create(ctx, store.NullOrgId, &device, nil, nil)
+	_, err := serviceHandler.store.Device().Create(ctx, store.NullOrgId, &device, nil)
 	require.NoError(err)
 	resp, retStatus := serviceHandler.PatchDevice(ctx, "foo", patch)
 	require.NotEqual(statusFailedCode, retStatus.Code)
@@ -62,12 +61,11 @@ func testDeviceStatusPatch(require *require.Assertions, orig api.Device, patch a
 	_ = os.Setenv(auth.DisableAuthEnvKey, "true")
 	_ = auth.InitAuth(nil, log.InitLogs())
 	serviceHandler := &ServiceHandler{
-		EventHandler:    NewEventHandler(&TestStore{}, log.InitLogs()),
-		store:           &TestStore{},
-		callbackManager: dummyCallbackManager(),
+		EventHandler: NewEventHandler(&TestStore{}, log.InitLogs()),
+		store:        &TestStore{},
 	}
 	ctx := context.Background()
-	_, err := serviceHandler.store.Device().Create(ctx, store.NullOrgId, &orig, nil, nil)
+	_, err := serviceHandler.store.Device().Create(ctx, store.NullOrgId, &orig, nil)
 	require.NoError(err)
 	resp, retStatus := serviceHandler.PatchDeviceStatus(ctx, "foo", patch)
 	require.NotEqual(statusFailedCode, retStatus.Code)
@@ -339,14 +337,13 @@ func TestDeviceNonExistingResource(t *testing.T) {
 	}
 
 	serviceHandler := ServiceHandler{
-		EventHandler:    NewEventHandler(&TestStore{}, log.InitLogs()),
-		store:           &TestStore{},
-		callbackManager: dummyCallbackManager(),
+		EventHandler: NewEventHandler(&TestStore{}, log.InitLogs()),
+		store:        &TestStore{},
 	}
 	ctx := context.Background()
 	_, err := serviceHandler.store.Device().Create(ctx, store.NullOrgId, &api.Device{
 		Metadata: api.ObjectMeta{Name: lo.ToPtr("foo")},
-	}, nil, nil)
+	}, nil)
 	require.NoError(err)
 	_, retStatus := serviceHandler.PatchDevice(ctx, "bar", pr)
 	require.Equal(statusNotFoundCode, retStatus.Code)
@@ -357,10 +354,9 @@ func TestDeviceDisconnected(t *testing.T) {
 	require := require.New(t)
 
 	serviceHandler := &ServiceHandler{
-		EventHandler:    NewEventHandler(&TestStore{}, logrus.New()),
-		store:           &TestStore{},
-		callbackManager: dummyCallbackManager(),
-		log:             logrus.New(),
+		EventHandler: NewEventHandler(&TestStore{}, logrus.New()),
+		store:        &TestStore{},
+		log:          logrus.New(),
 	}
 	ctx := context.Background()
 	ctx = context.WithValue(ctx, consts.InternalRequestCtxKey, true)

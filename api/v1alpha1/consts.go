@@ -1,6 +1,14 @@
 package v1alpha1
 
-import "time"
+import (
+	"time"
+
+	"github.com/google/uuid"
+)
+
+var (
+	NullOrgId = uuid.MustParse("00000000-0000-0000-0000-000000000000")
+)
 
 const (
 	APIGroup = "flightctl.io"
@@ -69,6 +77,9 @@ const (
 	EventAPIVersion = "v1alpha1"
 	EventKind       = "Event"
 	EventListKind   = "EventList"
+
+	// When this annotation is present, it means that the device should not be rendered
+	EventAnnotationDelayDeviceRender = "fleet-controller/delayDeviceRender"
 
 	OrganizationAPIVersion = "v1alpha1"
 	OrganizationKind       = "Organization"

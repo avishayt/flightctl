@@ -32,8 +32,6 @@ type TemplateVersionStore struct {
 	eventCallbackCaller EventCallbackCaller
 }
 
-type TemplateVersionStoreCallback func(context.Context, uuid.UUID, *api.TemplateVersion, *api.TemplateVersion)
-
 // Make sure we conform to TemplateVersion interface
 var _ TemplateVersion = (*TemplateVersionStore)(nil)
 
@@ -124,7 +122,7 @@ func (s *TemplateVersionStore) GetLatest(ctx context.Context, orgId uuid.UUID, f
 
 func (s *TemplateVersionStore) Delete(ctx context.Context, orgId uuid.UUID, fleet string, name string, eventCallback EventCallback) (bool, error) {
 	deleted, err := s.genericStore.Delete(ctx, model.TemplateVersion{OrgID: orgId, Name: name, FleetName: fleet})
-	if deleted {
+	if deleted && eventCallback != nil {
 		s.eventCallbackCaller(ctx, eventCallback, orgId, name, nil, nil, false, err)
 	}
 	return deleted, err

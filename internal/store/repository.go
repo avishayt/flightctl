@@ -33,9 +33,6 @@ type RepositoryStore struct {
 	eventCallbackCaller EventCallbackCaller
 }
 
-type RepositoryStoreCallback func(context.Context, uuid.UUID, *api.Repository, *api.Repository)
-type RepositoryStoreAllDeletedCallback func(context.Context, uuid.UUID)
-
 // Make sure we conform to Repository interface
 var _ Repository = (*RepositoryStore)(nil)
 

@@ -530,6 +530,17 @@ func (s *DummyOrganization) List(ctx context.Context) ([]*model.Organization, er
 	return *s.organizations, nil
 }
 
+// --------------------------------------> WorkerClient
+
+type DummyWorkerClient struct {
+}
+
+func (s *DummyWorkerClient) EmitEvent(ctx context.Context, event *api.Event) {
+	// TODO: implement
+}
+
+// --------------------------------------> Helper functions
+
 func deepCopy(src, dst interface{}) {
 	data, err := json.Marshal(src)
 	if err != nil {

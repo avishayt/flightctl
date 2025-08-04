@@ -46,7 +46,7 @@ func testDevicePatch(require *require.Assertions, patch api.PatchRequest) (*api.
 		Status: &status,
 	}
 	serviceHandler := ServiceHandler{
-		EventHandler: NewEventHandler(&TestStore{}, log.InitLogs()),
+		EventHandler: NewEventHandler(&TestStore{}, log.InitLogs(), &DummyWorkerClient{}),
 		store:        &TestStore{},
 	}
 	ctx := context.Background()
@@ -61,7 +61,7 @@ func testDeviceStatusPatch(require *require.Assertions, orig api.Device, patch a
 	_ = os.Setenv(auth.DisableAuthEnvKey, "true")
 	_ = auth.InitAuth(nil, log.InitLogs())
 	serviceHandler := &ServiceHandler{
-		EventHandler: NewEventHandler(&TestStore{}, log.InitLogs()),
+		EventHandler: NewEventHandler(&TestStore{}, log.InitLogs(), &DummyWorkerClient{}),
 		store:        &TestStore{},
 	}
 	ctx := context.Background()
@@ -337,7 +337,7 @@ func TestDeviceNonExistingResource(t *testing.T) {
 	}
 
 	serviceHandler := ServiceHandler{
-		EventHandler: NewEventHandler(&TestStore{}, log.InitLogs()),
+		EventHandler: NewEventHandler(&TestStore{}, log.InitLogs(), &DummyWorkerClient{}),
 		store:        &TestStore{},
 	}
 	ctx := context.Background()
@@ -354,7 +354,7 @@ func TestDeviceDisconnected(t *testing.T) {
 	require := require.New(t)
 
 	serviceHandler := &ServiceHandler{
-		EventHandler: NewEventHandler(&TestStore{}, logrus.New()),
+		EventHandler: NewEventHandler(&TestStore{}, logrus.New(), &DummyWorkerClient{}),
 		store:        &TestStore{},
 		log:          logrus.New(),
 	}

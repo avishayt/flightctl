@@ -34,7 +34,7 @@ func testRepositoryPatch(require *require.Assertions, patch api.PatchRequest) (*
 	}
 
 	serviceHandler := ServiceHandler{
-		EventHandler: NewEventHandler(&TestStore{}, logrus.New()),
+		EventHandler: NewEventHandler(&TestStore{}, logrus.New(), &DummyWorkerClient{}),
 		store:        &TestStore{},
 		log:          logrus.New(),
 	}
@@ -165,7 +165,7 @@ func TestRepositoryNonExistingResource(t *testing.T) {
 	}
 
 	serviceHandler := ServiceHandler{
-		EventHandler: NewEventHandler(&TestStore{}, logrus.New()),
+		EventHandler: NewEventHandler(&TestStore{}, logrus.New(), &DummyWorkerClient{}),
 		store:        &TestStore{},
 		log:          logrus.New(),
 	}
@@ -217,7 +217,7 @@ func TestRepoTester_SetAccessCondition(t *testing.T) {
 	require := require.New(t)
 
 	serviceHandler := ServiceHandler{
-		EventHandler: NewEventHandler(&TestStore{}, logrus.New()),
+		EventHandler: NewEventHandler(&TestStore{}, logrus.New(), &DummyWorkerClient{}),
 		store:        &TestStore{},
 		log:          logrus.New(),
 	}

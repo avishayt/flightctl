@@ -182,9 +182,12 @@ const (
 	EventReasonEnrollmentRequestApprovalFailed EventReason = "EnrollmentRequestApprovalFailed"
 	EventReasonEnrollmentRequestApproved       EventReason = "EnrollmentRequestApproved"
 	EventReasonFleetRolloutBatchCompleted      EventReason = "FleetRolloutBatchCompleted"
+	EventReasonFleetRolloutBatchDispatched     EventReason = "FleetRolloutBatchDispatched"
 	EventReasonFleetRolloutCreated             EventReason = "FleetRolloutCreated"
+	EventReasonFleetRolloutDeviceSelected      EventReason = "FleetRolloutDeviceSelected"
 	EventReasonFleetRolloutStarted             EventReason = "FleetRolloutStarted"
 	EventReasonInternalTaskFailed              EventReason = "InternalTaskFailed"
+	EventReasonReferencedRepositoryUpdated     EventReason = "ReferencedRepositoryUpdated"
 	EventReasonRepositoryAccessible            EventReason = "RepositoryAccessible"
 	EventReasonRepositoryInaccessible          EventReason = "RepositoryInaccessible"
 	EventReasonResourceCreated                 EventReason = "ResourceCreated"
@@ -215,15 +218,25 @@ const (
 	FileOperationUpdated FileOperation = "updated"
 )
 
+// Defines values for FleetRolloutBatchDispatchedDetailsDetailType.
+const (
+	FleetRolloutBatchDispatched FleetRolloutBatchDispatchedDetailsDetailType = "FleetRolloutBatchDispatched"
+)
+
+// Defines values for FleetRolloutDeviceSelectedDetailsDetailType.
+const (
+	FleetRolloutDeviceSelected FleetRolloutDeviceSelectedDetailsDetailType = "FleetRolloutDeviceSelected"
+)
+
 // Defines values for FleetRolloutStartedDetailsDetailType.
 const (
 	FleetRolloutStarted FleetRolloutStartedDetailsDetailType = "FleetRolloutStarted"
 )
 
-// Defines values for FleetRolloutStartedDetailsIsImmediate.
+// Defines values for FleetRolloutStartedDetailsRolloutStrategy.
 const (
-	Batched   FleetRolloutStartedDetailsIsImmediate = "batched"
-	Immediate FleetRolloutStartedDetailsIsImmediate = "immediate"
+	Batched   FleetRolloutStartedDetailsRolloutStrategy = "batched"
+	Immediate FleetRolloutStartedDetailsRolloutStrategy = "immediate"
 )
 
 // Defines values for ImagePullPolicy.
@@ -251,6 +264,11 @@ const (
 	Add     PatchRequestOp = "add"
 	Remove  PatchRequestOp = "remove"
 	Replace PatchRequestOp = "replace"
+)
+
+// Defines values for ReferencedRepositoryUpdatedDetailsDetailType.
+const (
+	ReferencedRepositoryUpdated ReferencedRepositoryUpdatedDetailsDetailType = "ReferencedRepositoryUpdated"
 )
 
 // Defines values for RepoSpecType.
@@ -289,9 +307,11 @@ const (
 
 // Defines values for ResourceUpdatedDetailsUpdatedFields.
 const (
-	Labels ResourceUpdatedDetailsUpdatedFields = "labels"
-	Owner  ResourceUpdatedDetailsUpdatedFields = "owner"
-	Spec   ResourceUpdatedDetailsUpdatedFields = "spec"
+	Labels       ResourceUpdatedDetailsUpdatedFields = "labels"
+	Owner        ResourceUpdatedDetailsUpdatedFields = "owner"
+	Spec         ResourceUpdatedDetailsUpdatedFields = "spec"
+	SpecSelector ResourceUpdatedDetailsUpdatedFields = "spec.selector"
+	SpecTemplate ResourceUpdatedDetailsUpdatedFields = "spec.template"
 )
 
 // Defines values for RolloutStrategy.
@@ -1177,13 +1197,43 @@ type FleetList struct {
 	Metadata ListMeta `json:"metadata"`
 }
 
+// FleetRolloutBatchDispatchedDetails defines model for FleetRolloutBatchDispatchedDetails.
+type FleetRolloutBatchDispatchedDetails struct {
+	// BatchNumber Number of this batch within the fleet rollout.
+	BatchNumber string `json:"batchNumber"`
+
+	// DetailType The type of detail for discriminator purposes.
+	DetailType FleetRolloutBatchDispatchedDetailsDetailType `json:"detailType"`
+
+	// TemplateVersion The name of the TemplateVersion that this batch is rolling out to.
+	TemplateVersion string `json:"templateVersion"`
+}
+
+// FleetRolloutBatchDispatchedDetailsDetailType The type of detail for discriminator purposes.
+type FleetRolloutBatchDispatchedDetailsDetailType string
+
+// FleetRolloutDeviceSelectedDetails defines model for FleetRolloutDeviceSelectedDetails.
+type FleetRolloutDeviceSelectedDetails struct {
+	// DetailType The type of detail for discriminator purposes.
+	DetailType FleetRolloutDeviceSelectedDetailsDetailType `json:"detailType"`
+
+	// FleetName The name of the fleet that the device is being selected for.
+	FleetName string `json:"fleetName"`
+
+	// TemplateVersion The name of the TemplateVersion that the device is being selected to render.
+	TemplateVersion string `json:"templateVersion"`
+}
+
+// FleetRolloutDeviceSelectedDetailsDetailType The type of detail for discriminator purposes.
+type FleetRolloutDeviceSelectedDetailsDetailType string
+
 // FleetRolloutStartedDetails defines model for FleetRolloutStartedDetails.
 type FleetRolloutStartedDetails struct {
 	// DetailType The type of detail for discriminator purposes.
 	DetailType FleetRolloutStartedDetailsDetailType `json:"detailType"`
 
-	// IsImmediate Rollout strategy type.
-	IsImmediate FleetRolloutStartedDetailsIsImmediate `json:"isImmediate"`
+	// RolloutStrategy Rollout strategy type.
+	RolloutStrategy FleetRolloutStartedDetailsRolloutStrategy `json:"rolloutStrategy"`
 
 	// TemplateVersion The name of the TemplateVersion that is rolling out.
 	TemplateVersion string `json:"templateVersion"`
@@ -1192,8 +1242,8 @@ type FleetRolloutStartedDetails struct {
 // FleetRolloutStartedDetailsDetailType The type of detail for discriminator purposes.
 type FleetRolloutStartedDetailsDetailType string
 
-// FleetRolloutStartedDetailsIsImmediate Rollout strategy type.
-type FleetRolloutStartedDetailsIsImmediate string
+// FleetRolloutStartedDetailsRolloutStrategy Rollout strategy type.
+type FleetRolloutStartedDetailsRolloutStrategy string
 
 // FleetRolloutStatus FleetRolloutStatus represents information about the status of a fleet rollout.
 type FleetRolloutStatus struct {
@@ -1407,11 +1457,11 @@ type InternalTaskFailedDetails struct {
 	// ErrorMessage The error message describing the failure.
 	ErrorMessage string `json:"errorMessage"`
 
+	// OriginalEventJson The original event that triggered the internal task, serialized as JSON.
+	OriginalEventJson *string `json:"originalEventJson,omitempty"`
+
 	// RetryCount Number of times the task has been retried.
 	RetryCount *int `json:"retryCount,omitempty"`
-
-	// TaskParameters Parameters needed to retry the task.
-	TaskParameters *map[string]string `json:"taskParameters,omitempty"`
 
 	// TaskType The type of internal task that failed.
 	TaskType string `json:"taskType"`
@@ -1581,6 +1631,18 @@ type PatchRequestOp string
 
 // Percentage Percentage is the string format representing percentage string.
 type Percentage = string
+
+// ReferencedRepositoryUpdatedDetails defines model for ReferencedRepositoryUpdatedDetails.
+type ReferencedRepositoryUpdatedDetails struct {
+	// DetailType The type of detail for discriminator purposes.
+	DetailType ReferencedRepositoryUpdatedDetailsDetailType `json:"detailType"`
+
+	// RepositoryName The name of the repository that was updated.
+	RepositoryName string `json:"repositoryName"`
+}
+
+// ReferencedRepositoryUpdatedDetailsDetailType The type of detail for discriminator purposes.
+type ReferencedRepositoryUpdatedDetailsDetailType string
 
 // RelativePath Represents a relative file path.
 type RelativePath struct {
@@ -2814,6 +2876,62 @@ func (t *EventDetails) MergeInternalTaskFailedDetails(v InternalTaskFailedDetail
 	return err
 }
 
+// AsFleetRolloutBatchDispatchedDetails returns the union data inside the EventDetails as a FleetRolloutBatchDispatchedDetails
+func (t EventDetails) AsFleetRolloutBatchDispatchedDetails() (FleetRolloutBatchDispatchedDetails, error) {
+	var body FleetRolloutBatchDispatchedDetails
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromFleetRolloutBatchDispatchedDetails overwrites any union data inside the EventDetails as the provided FleetRolloutBatchDispatchedDetails
+func (t *EventDetails) FromFleetRolloutBatchDispatchedDetails(v FleetRolloutBatchDispatchedDetails) error {
+	v.DetailType = "FleetRolloutBatchDispatched"
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeFleetRolloutBatchDispatchedDetails performs a merge with any union data inside the EventDetails, using the provided FleetRolloutBatchDispatchedDetails
+func (t *EventDetails) MergeFleetRolloutBatchDispatchedDetails(v FleetRolloutBatchDispatchedDetails) error {
+	v.DetailType = "FleetRolloutBatchDispatched"
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsFleetRolloutDeviceSelectedDetails returns the union data inside the EventDetails as a FleetRolloutDeviceSelectedDetails
+func (t EventDetails) AsFleetRolloutDeviceSelectedDetails() (FleetRolloutDeviceSelectedDetails, error) {
+	var body FleetRolloutDeviceSelectedDetails
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromFleetRolloutDeviceSelectedDetails overwrites any union data inside the EventDetails as the provided FleetRolloutDeviceSelectedDetails
+func (t *EventDetails) FromFleetRolloutDeviceSelectedDetails(v FleetRolloutDeviceSelectedDetails) error {
+	v.DetailType = "FleetRolloutDeviceSelected"
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeFleetRolloutDeviceSelectedDetails performs a merge with any union data inside the EventDetails, using the provided FleetRolloutDeviceSelectedDetails
+func (t *EventDetails) MergeFleetRolloutDeviceSelectedDetails(v FleetRolloutDeviceSelectedDetails) error {
+	v.DetailType = "FleetRolloutDeviceSelected"
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
 // AsResourceSyncCompletedDetails returns the union data inside the EventDetails as a ResourceSyncCompletedDetails
 func (t EventDetails) AsResourceSyncCompletedDetails() (ResourceSyncCompletedDetails, error) {
 	var body ResourceSyncCompletedDetails
@@ -2870,6 +2988,34 @@ func (t *EventDetails) MergeFleetRolloutStartedDetails(v FleetRolloutStartedDeta
 	return err
 }
 
+// AsReferencedRepositoryUpdatedDetails returns the union data inside the EventDetails as a ReferencedRepositoryUpdatedDetails
+func (t EventDetails) AsReferencedRepositoryUpdatedDetails() (ReferencedRepositoryUpdatedDetails, error) {
+	var body ReferencedRepositoryUpdatedDetails
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromReferencedRepositoryUpdatedDetails overwrites any union data inside the EventDetails as the provided ReferencedRepositoryUpdatedDetails
+func (t *EventDetails) FromReferencedRepositoryUpdatedDetails(v ReferencedRepositoryUpdatedDetails) error {
+	v.DetailType = "ReferencedRepositoryUpdated"
+	b, err := json.Marshal(v)
+	t.union = b
+	return err
+}
+
+// MergeReferencedRepositoryUpdatedDetails performs a merge with any union data inside the EventDetails, using the provided ReferencedRepositoryUpdatedDetails
+func (t *EventDetails) MergeReferencedRepositoryUpdatedDetails(v ReferencedRepositoryUpdatedDetails) error {
+	v.DetailType = "ReferencedRepositoryUpdated"
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
 func (t EventDetails) Discriminator() (string, error) {
 	var discriminator struct {
 		Discriminator string `json:"detailType"`
@@ -2890,10 +3036,16 @@ func (t EventDetails) ValueByDiscriminator() (interface{}, error) {
 		return t.AsDeviceMultipleOwnersResolvedDetails()
 	case "DeviceOwnershipChanged":
 		return t.AsDeviceOwnershipChangedDetails()
+	case "FleetRolloutBatchDispatched":
+		return t.AsFleetRolloutBatchDispatchedDetails()
+	case "FleetRolloutDeviceSelected":
+		return t.AsFleetRolloutDeviceSelectedDetails()
 	case "FleetRolloutStarted":
 		return t.AsFleetRolloutStartedDetails()
 	case "InternalTaskFailed":
 		return t.AsInternalTaskFailedDetails()
+	case "ReferencedRepositoryUpdated":
+		return t.AsReferencedRepositoryUpdatedDetails()
 	case "ResourceSyncCompleted":
 		return t.AsResourceSyncCompletedDetails()
 	case "ResourceUpdated":

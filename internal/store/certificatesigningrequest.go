@@ -118,7 +118,7 @@ func (s *CertificateSigningRequestStore) List(ctx context.Context, orgId uuid.UU
 
 func (s *CertificateSigningRequestStore) Delete(ctx context.Context, orgId uuid.UUID, name string, eventCallback EventCallback) error {
 	deleted, err := s.genericStore.Delete(ctx, model.CertificateSigningRequest{Resource: model.Resource{OrgID: orgId, Name: name}})
-	if deleted {
+	if deleted && eventCallback != nil {
 		s.eventCallbackCaller(ctx, eventCallback, orgId, name, nil, nil, false, err)
 	}
 	return err

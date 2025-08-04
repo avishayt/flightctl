@@ -3,6 +3,7 @@ package tasks_test
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 
 	api "github.com/flightctl/flightctl/api/v1alpha1"
 	"github.com/flightctl/flightctl/internal/config"
@@ -11,7 +12,7 @@ import (
 	"github.com/flightctl/flightctl/internal/service"
 	"github.com/flightctl/flightctl/internal/store"
 	"github.com/flightctl/flightctl/internal/tasks"
-	"github.com/flightctl/flightctl/internal/tasks_client"
+	"github.com/flightctl/flightctl/internal/worker_client"
 	flightlog "github.com/flightctl/flightctl/pkg/log"
 	"github.com/flightctl/flightctl/pkg/queues"
 	testutil "github.com/flightctl/flightctl/test/util"
@@ -23,49 +24,59 @@ import (
 	"go.uber.org/mock/gomock"
 )
 
-type resourceReferenceMatcher struct {
-	taskName string
-	name     string
+type eventMatcher struct {
+	event api.Event
 }
 
-func newResourceReferenceMatcher(taskName, name string) gomock.Matcher {
-	return &resourceReferenceMatcher{
-		taskName: taskName,
-		name:     name,
+func newEventMatcher(kind, name string, reason api.EventReason) gomock.Matcher {
+	return &eventMatcher{
+		event: api.Event{
+			InvolvedObject: api.ObjectReference{
+				Kind: kind,
+				Name: name,
+			},
+			Reason: reason,
+		},
 	}
 }
 
-func (r *resourceReferenceMatcher) Matches(param any) bool {
-	b, ok := param.([]byte)
+func (r *eventMatcher) Matches(param any) bool {
+	// json unmarshal the param
+	paramBytes, ok := param.([]byte)
 	if !ok {
 		return false
 	}
-	var reference tasks_client.ResourceReference
-	if err := json.Unmarshal(b, &reference); err != nil {
+	receivedEvent := api.Event{}
+	err := json.Unmarshal(paramBytes, &receivedEvent)
+	if err != nil {
 		return false
 	}
-	if r.taskName != reference.TaskName {
+
+	if receivedEvent.InvolvedObject.Kind != r.event.InvolvedObject.Kind {
 		return false
 	}
-	return r.name == reference.Name || r.name == ""
+	if receivedEvent.InvolvedObject.Name != r.event.InvolvedObject.Name {
+		return false
+	}
+	return receivedEvent.Reason == r.event.Reason
 }
 
-func (r *resourceReferenceMatcher) String() string {
-	return "resource-reference-matcher"
+func (r *eventMatcher) String() string {
+	return fmt.Sprintf("event-matcher: %v", r.event)
 }
 
 var _ = Describe("RepoUpdate", func() {
 	var (
-		log             *logrus.Logger
-		ctx             context.Context
-		orgId           uuid.UUID
-		storeInst       store.Store
-		serviceHandler  service.Service
-		cfg             *config.Config
-		dbName          string
-		callbackManager tasks_client.CallbackManager
-		ctrl            *gomock.Controller
-		mockPublisher   *queues.MockPublisher
+		log            *logrus.Logger
+		ctx            context.Context
+		orgId          uuid.UUID
+		storeInst      store.Store
+		serviceHandler service.Service
+		cfg            *config.Config
+		dbName         string
+		workerClient   worker_client.WorkerClient
+		ctrl           *gomock.Controller
+		mockPublisher  *queues.MockPublisher
 	)
 
 	BeforeEach(func() {
@@ -76,10 +87,10 @@ var _ = Describe("RepoUpdate", func() {
 		storeInst, cfg, dbName, _ = store.PrepareDBForUnitTests(ctx, log)
 		ctrl = gomock.NewController(GinkgoT())
 		mockPublisher = queues.NewMockPublisher(ctrl)
-		callbackManager = tasks_client.NewCallbackManager(mockPublisher, log)
+		workerClient = worker_client.NewWorkerClient(mockPublisher, log)
 		kvStore, err := kvstore.NewKVStore(ctx, log, "localhost", 6379, "adminpass")
 		Expect(err).ToNot(HaveOccurred())
-		serviceHandler = service.NewServiceHandler(storeInst, callbackManager, kvStore, nil, log, "", "")
+		serviceHandler = service.NewServiceHandler(storeInst, workerClient, kvStore, nil, log, "", "")
 
 		// Create 2 git config items, each to a different repo
 		err = testutil.CreateRepositories(ctx, 2, storeInst, orgId)
@@ -133,12 +144,12 @@ var _ = Describe("RepoUpdate", func() {
 		}
 		fleet2.Spec.Template.Spec = api.DeviceSpec{Config: &config2}
 
-		fleetCallback := store.FleetStoreCallback(func(context.Context, uuid.UUID, *api.Fleet, *api.Fleet) {})
-		_, err = storeInst.Fleet().Create(ctx, orgId, &fleet1, fleetCallback, nil)
+		eventCallback := store.EventCallback(func(context.Context, api.ResourceKind, uuid.UUID, string, interface{}, interface{}, bool, error) {})
+		_, err = storeInst.Fleet().Create(ctx, orgId, &fleet1, eventCallback)
 		Expect(err).ToNot(HaveOccurred())
 		err = storeInst.Fleet().OverwriteRepositoryRefs(ctx, orgId, "fleet1", "myrepository-1")
 		Expect(err).ToNot(HaveOccurred())
-		_, err = storeInst.Fleet().Create(ctx, orgId, &fleet2, fleetCallback, nil)
+		_, err = storeInst.Fleet().Create(ctx, orgId, &fleet2, eventCallback)
 		Expect(err).ToNot(HaveOccurred())
 		err = storeInst.Fleet().OverwriteRepositoryRefs(ctx, orgId, "fleet2", "myrepository-2")
 		Expect(err).ToNot(HaveOccurred())
@@ -158,12 +169,11 @@ var _ = Describe("RepoUpdate", func() {
 			},
 		}
 
-		devCallback := store.DeviceStoreCallback(func(context.Context, uuid.UUID, *api.Device, *api.Device) {})
-		_, err = storeInst.Device().Create(ctx, orgId, &device1, devCallback, nil)
+		_, err = storeInst.Device().Create(ctx, orgId, &device1, eventCallback)
 		Expect(err).ToNot(HaveOccurred())
 		err = storeInst.Device().OverwriteRepositoryRefs(ctx, orgId, "device1", "myrepository-1")
 		Expect(err).ToNot(HaveOccurred())
-		_, err = storeInst.Device().Create(ctx, orgId, &device2, devCallback, nil)
+		_, err = storeInst.Device().Create(ctx, orgId, &device2, eventCallback)
 		Expect(err).ToNot(HaveOccurred())
 		err = storeInst.Device().OverwriteRepositoryRefs(ctx, orgId, "device2", "myrepository-2")
 		Expect(err).ToNot(HaveOccurred())
@@ -176,10 +186,9 @@ var _ = Describe("RepoUpdate", func() {
 
 	When("a Repository definition is updated", func() {
 		It("refreshes relevant fleets and devices", func() {
-			resourceRef := tasks_client.ResourceReference{OrgID: orgId, Name: "myrepository-1", Kind: api.RepositoryKind}
-			logic := tasks.NewRepositoryUpdateLogic(callbackManager, log, serviceHandler, resourceRef)
-			mockPublisher.EXPECT().Publish(gomock.Any(), newResourceReferenceMatcher(tasks_client.FleetValidateTask, "fleet1")).Times(1)
-			mockPublisher.EXPECT().Publish(gomock.Any(), newResourceReferenceMatcher(tasks_client.DeviceRenderTask, "device1")).Times(1)
+			logic := tasks.NewRepositoryUpdateLogic(log, serviceHandler, api.Event{InvolvedObject: api.ObjectReference{Kind: api.RepositoryKind, Name: "myrepository-1"}})
+			mockPublisher.EXPECT().Publish(gomock.Any(), newEventMatcher(api.FleetKind, "fleet1", api.EventReasonReferencedRepositoryUpdated)).Times(1)
+			mockPublisher.EXPECT().Publish(gomock.Any(), newEventMatcher(api.DeviceKind, "device1", api.EventReasonReferencedRepositoryUpdated)).Times(1)
 			err := logic.HandleRepositoryUpdate(ctx)
 			Expect(err).ToNot(HaveOccurred())
 

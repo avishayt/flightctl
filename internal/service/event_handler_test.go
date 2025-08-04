@@ -27,7 +27,7 @@ import (
 func serviceHandler() *ServiceHandler {
 	testStore := &TestStore{}
 	return &ServiceHandler{
-		EventHandler: NewEventHandler(testStore, logrus.New()),
+		EventHandler: NewEventHandler(testStore, logrus.New(), &DummyWorkerClient{}),
 		store:        testStore,
 		log:          logrus.New(),
 	}
@@ -572,9 +572,9 @@ func TestGetInternalTaskFailedEvent(t *testing.T) {
 	taskType := "sync"
 	errorMessage := "connection timeout"
 	retryCount := lo.ToPtr(3)
-	taskParameters := map[string]string{"param1": "value1", "param2": "value2"}
+	originalEventJson := "{\"kind\":\"Device\",\"name\":\"test-device\",\"reason\":\"ResourceUpdated\",\"details\":{\"newOwner\":\"fleet2\",\"previousOwner\":\"fleet1\",\"updatedFields\":[\"Owner\"]}}"
 
-	event := common.GetInternalTaskFailedEvent(ctx, resourceKind, resourceName, taskType, errorMessage, retryCount, taskParameters, logger)
+	event := common.GetInternalTaskFailedEvent(ctx, resourceKind, resourceName, taskType, errorMessage, retryCount, originalEventJson, logger)
 
 	require.NotNil(event)
 	require.Equal(resourceKind, api.ResourceKind(event.InvolvedObject.Kind))
@@ -591,7 +591,8 @@ func TestGetInternalTaskFailedEvent(t *testing.T) {
 	require.Equal(taskType, detailsStruct.TaskType)
 	require.Equal(errorMessage, detailsStruct.ErrorMessage)
 	require.Equal(retryCount, detailsStruct.RetryCount)
-	require.Equal(&taskParameters, detailsStruct.TaskParameters)
+	require.NotNil(detailsStruct.OriginalEventJson)
+	require.Equal(originalEventJson, *detailsStruct.OriginalEventJson)
 }
 
 func TestGetResourceCreatedOrUpdatedEvent(t *testing.T) {

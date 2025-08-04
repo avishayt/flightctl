@@ -50,7 +50,7 @@ func testFleetPatch(require *require.Assertions, patch api.PatchRequest) (*api.F
 
 	testStore := &TestStore{}
 	serviceHandler := &ServiceHandler{
-		EventHandler: NewEventHandler(testStore, log.InitLogs()),
+		EventHandler: NewEventHandler(testStore, log.InitLogs(), &DummyWorkerClient{}),
 		store:        testStore,
 	}
 	ctx := context.Background()
@@ -207,7 +207,7 @@ func TestFleetNonExistingResource(t *testing.T) {
 
 	testStore := &TestStore{}
 	serviceHandler := &ServiceHandler{
-		EventHandler: NewEventHandler(testStore, log.InitLogs()),
+		EventHandler: NewEventHandler(testStore, log.InitLogs(), &DummyWorkerClient{}),
 		store:        testStore,
 	}
 	ctx := context.Background()

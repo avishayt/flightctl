@@ -6,8 +6,9 @@ import (
 
 	api "github.com/flightctl/flightctl/api/v1alpha1"
 	"github.com/flightctl/flightctl/internal/service"
+	"github.com/flightctl/flightctl/internal/service/common"
 	"github.com/flightctl/flightctl/internal/store"
-	"github.com/flightctl/flightctl/internal/tasks_client"
+	"github.com/flightctl/flightctl/internal/util"
 	"github.com/google/uuid"
 	"github.com/samber/lo"
 	"github.com/sirupsen/logrus"
@@ -20,16 +21,44 @@ type Reconciler interface {
 const DeviceSelectionTaskName = "rollout-device-selection"
 
 type reconciler struct {
-	serviceHandler  service.Service
-	log             logrus.FieldLogger
-	callbackManager tasks_client.CallbackManager
+	serviceHandler service.Service
+	log            logrus.FieldLogger
 }
 
-func NewReconciler(serviceHandler service.Service, callbackManager tasks_client.CallbackManager, log logrus.FieldLogger) Reconciler {
+func NewReconciler(serviceHandler service.Service, log logrus.FieldLogger) Reconciler {
 	return &reconciler{
-		serviceHandler:  serviceHandler,
-		log:             log,
-		callbackManager: callbackManager,
+		serviceHandler: serviceHandler,
+		log:            log,
+	}
+}
+
+func (r *reconciler) emitFleetRolloutStartedEvent(ctx context.Context, orgId uuid.UUID, fleet api.Fleet, annotations map[string]string) {
+	fleetName := lo.FromPtr(fleet.Metadata.Name)
+	templateVersionName, exists := annotations[api.FleetAnnotationTemplateVersion]
+	if !exists {
+		templateVersionName = "unknown"
+		r.log.Warnf("%v/%s: Active rollout detected but no template version found, using 'unknown'", orgId, fleetName)
+	}
+	event := common.GetFleetRolloutStartedEvent(ctx, templateVersionName, fleetName, true)
+	if event != nil {
+		r.serviceHandler.CreateEvent(ctx, event)
+	}
+}
+
+func (r *reconciler) emitFleetRolloutBatchDispatchedEvent(ctx context.Context, fleet api.Fleet, templateVersionName string) {
+	fleetName := lo.FromPtr(fleet.Metadata.Name)
+	batchNumberStr, exists := util.GetFromMap(lo.FromPtr(fleet.Metadata.Annotations), api.FleetAnnotationBatchNumber)
+	if exists {
+		r.log.Infof("%v/%s: Emitting FleetRolloutBatchDispatched event for batch %s", store.NullOrgId, fleetName, batchNumberStr)
+		event := common.GetFleetRolloutBatchDispatchedEvent(ctx, fleetName, templateVersionName, batchNumberStr)
+		if event != nil {
+			r.log.Infof("%v/%s: Created event, calling CreateEvent", store.NullOrgId, fleetName)
+			r.serviceHandler.CreateEvent(ctx, event)
+		} else {
+			r.log.Errorf("%v/%s: Failed to create FleetRolloutBatchDispatched event", store.NullOrgId, fleetName)
+		}
+	} else {
+		r.log.Warnf("%v/%s: No batch number found for FleetRolloutBatchDispatched event", store.NullOrgId, fleetName)
 	}
 }
 
@@ -51,9 +80,8 @@ func (r *reconciler) reconcileFleet(ctx context.Context, orgId uuid.UUID, fleet 
 			r.log.WithError(err).Errorf("%v/%s: CleanupRollout", orgId, fleetName)
 		}
 		if rolloutWasActive {
-
 			// Send the entire fleet for rollout
-			r.callbackManager.FleetRolloutSelectionUpdated(ctx, orgId, fleetName)
+			r.emitFleetRolloutStartedEvent(ctx, orgId, fleet, annotations)
 		}
 		return
 	}
@@ -123,8 +151,9 @@ func (r *reconciler) reconcileFleet(ctx context.Context, orgId uuid.UUID, fleet 
 			if err = selection.OnRollout(ctx); err != nil {
 				r.log.WithError(err).Errorf("%v/%s: OnRollout", orgId, fleetName)
 			}
-			// Send the current batch to be rolled out.
-			r.callbackManager.FleetRolloutSelectionUpdated(ctx, orgId, fleetName)
+			// Emit FleetRolloutBatchDispatched event to send the current batch to be rolled out.
+			r.log.Infof("%v/%s: Batch not rolled out, emitting FleetRolloutBatchDispatched event", orgId, fleetName)
+			r.emitFleetRolloutBatchDispatchedEvent(ctx, fleet, templateVersionName)
 		}
 
 		// Is the current batch complete

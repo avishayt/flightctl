@@ -120,8 +120,8 @@ var _ = Describe("TemplateVersion", func() {
 			err = testutil.CreateTestTemplateVersions(ctx, numResources, tvStore, otherOrgId, "myfleet")
 			Expect(err).ToNot(HaveOccurred())
 
-			callback := store.FleetStoreCallback(func(context.Context, uuid.UUID, *api.Fleet, *api.Fleet) {})
-			err = storeInst.Fleet().Delete(ctx, otherOrgId, "myfleet", callback, nil)
+			eventCallback := store.EventCallback(func(context.Context, api.ResourceKind, uuid.UUID, string, interface{}, interface{}, bool, error) {})
+			err = storeInst.Fleet().Delete(ctx, otherOrgId, "myfleet", eventCallback)
 			Expect(err).ToNot(HaveOccurred())
 
 			templateVersions, err := storeInst.TemplateVersion().List(ctx, orgId, store.ListParams{})

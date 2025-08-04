@@ -312,7 +312,7 @@ func KeepDBDeviceStatus(device, dbDevice *api.Device) {
 	}
 }
 
-func ComputeDeviceStatusChanges(ctx context.Context, oldDevice, newDevice *api.Device, orgId uuid.UUID, st store.Store) ResourceUpdates {
+func ComputeDeviceStatusChanges(ctx context.Context, oldDevice, newDevice *api.Device) ResourceUpdates {
 	resourceUpdates := make(ResourceUpdates, 0, 6)
 
 	// Don't generate status change events during device creation (when oldDevice is nil)

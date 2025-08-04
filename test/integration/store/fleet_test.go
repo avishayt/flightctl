@@ -151,20 +151,20 @@ var _ = Describe("FleetStore create", func() {
 
 		It("Delete fleet success", func() {
 			called := false
-			callback := store.FleetStoreCallback(func(context.Context, uuid.UUID, *api.Fleet, *api.Fleet) {
+			callback := store.EventCallback(func(ctx context.Context, resourceKind api.ResourceKind, orgId uuid.UUID, name string, oldResource, newResource interface{}, created bool, err error) {
 				called = true
 			})
-			err := storeInst.Fleet().Delete(ctx, orgId, "myfleet-1", callback, nil)
+			err := storeInst.Fleet().Delete(ctx, orgId, "myfleet-1", callback)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(called).To(BeTrue())
 		})
 
 		It("Delete fleet success when not found", func() {
 			called := false
-			callback := store.FleetStoreCallback(func(context.Context, uuid.UUID, *api.Fleet, *api.Fleet) {
+			callback := store.EventCallback(func(ctx context.Context, resourceKind api.ResourceKind, orgId uuid.UUID, name string, oldResource, newResource interface{}, created bool, err error) {
 				called = true
 			})
-			err := storeInst.Fleet().Delete(ctx, orgId, "nonexistent", callback, nil)
+			err := storeInst.Fleet().Delete(ctx, orgId, "nonexistent", callback)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(called).To(BeFalse())
 		})
@@ -354,10 +354,10 @@ var _ = Describe("FleetStore create", func() {
 				Status: nil,
 			}
 			called := false
-			callback := store.FleetStoreCallback(func(context.Context, uuid.UUID, *api.Fleet, *api.Fleet) {
+			callback := store.EventCallback(func(ctx context.Context, resourceKind api.ResourceKind, orgId uuid.UUID, name string, oldResource, newResource interface{}, created bool, err error) {
 				called = true
 			})
-			_, created, err := storeInst.Fleet().CreateOrUpdate(ctx, orgId, &fleet, nil, true, callback, nil)
+			_, created, err := storeInst.Fleet().CreateOrUpdate(ctx, orgId, &fleet, nil, true, callback)
 			Expect(called).To(BeTrue())
 			Expect(err).ToNot(HaveOccurred())
 			Expect(created).To(Equal(true))
@@ -397,10 +397,10 @@ var _ = Describe("FleetStore create", func() {
 			updatedFleet.Metadata.Annotations = nil
 
 			called := false
-			callback := store.FleetStoreCallback(func(context.Context, uuid.UUID, *api.Fleet, *api.Fleet) {
+			callback := store.EventCallback(func(ctx context.Context, resourceKind api.ResourceKind, orgId uuid.UUID, name string, oldResource, newResource interface{}, created bool, err error) {
 				called = true
 			})
-			returnedFleet, created, err := storeInst.Fleet().CreateOrUpdate(ctx, orgId, updatedFleet, nil, true, callback, nil)
+			returnedFleet, created, err := storeInst.Fleet().CreateOrUpdate(ctx, orgId, updatedFleet, nil, true, callback)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(created).To(BeFalse())
 			Expect(called).To(BeTrue())
@@ -424,10 +424,10 @@ var _ = Describe("FleetStore create", func() {
 			fleet.Status = nil
 
 			called := false
-			callback := store.FleetStoreCallback(func(context.Context, uuid.UUID, *api.Fleet, *api.Fleet) {
+			callback := store.EventCallback(func(ctx context.Context, resourceKind api.ResourceKind, orgId uuid.UUID, name string, oldResource, newResource interface{}, created bool, err error) {
 				called = true
 			})
-			_, created, err := storeInst.Fleet().CreateOrUpdate(ctx, orgId, fleet, nil, true, callback, nil)
+			_, created, err := storeInst.Fleet().CreateOrUpdate(ctx, orgId, fleet, nil, true, callback)
 			Expect(called).To(BeTrue())
 			Expect(err).ToNot(HaveOccurred())
 			Expect(created).To(BeFalse())
@@ -488,10 +488,10 @@ var _ = Describe("FleetStore create", func() {
 
 			for i := 1; i <= numFleets; i++ {
 				called := false
-				callback := store.FleetStoreCallback(func(context.Context, uuid.UUID, *api.Fleet, *api.Fleet) {
+				callback := store.EventCallback(func(ctx context.Context, resourceKind api.ResourceKind, orgId uuid.UUID, name string, oldResource, newResource interface{}, created bool, err error) {
 					called = true
 				})
-				err := storeInst.Fleet().Delete(ctx, orgId, fmt.Sprintf("myfleet-%d", i), callback, nil)
+				err := storeInst.Fleet().Delete(ctx, orgId, fmt.Sprintf("myfleet-%d", i), callback)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(called).To(BeTrue())
 			}
@@ -587,10 +587,10 @@ var _ = Describe("FleetStore create", func() {
 			Expect(*(repos.Items[0]).Metadata.Name).To(Equal("myrepository-1"))
 
 			called := false
-			callback := store.FleetStoreCallback(func(context.Context, uuid.UUID, *api.Fleet, *api.Fleet) {
+			callback := store.EventCallback(func(ctx context.Context, resourceKind api.ResourceKind, orgId uuid.UUID, name string, oldResource, newResource interface{}, created bool, err error) {
 				called = true
 			})
-			err = storeInst.Fleet().Delete(ctx, orgId, "myfleet-1", callback, nil)
+			err = storeInst.Fleet().Delete(ctx, orgId, "myfleet-1", callback)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(called).To(BeTrue())
 		})

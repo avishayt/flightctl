@@ -21,6 +21,7 @@ import (
 	"github.com/flightctl/flightctl/internal/service"
 	"github.com/flightctl/flightctl/internal/store"
 	transport "github.com/flightctl/flightctl/internal/transport/agent"
+	"github.com/flightctl/flightctl/internal/worker_client"
 	"github.com/flightctl/flightctl/pkg/queues"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -84,13 +85,19 @@ func (s *AgentServer) GetGRPCServer() *AgentGrpcServer {
 func (s *AgentServer) Run(ctx context.Context) error {
 	s.log.Println("Initializing Agent-side API server")
 
+	publisher, err := worker_client.QueuePublisher(s.queuesProvider)
+	if err != nil {
+		return err
+	}
+	workerClient := worker_client.NewWorkerClient(publisher, s.log)
+
 	kvStore, err := kvstore.NewKVStore(ctx, s.log, s.cfg.KV.Hostname, s.cfg.KV.Port, s.cfg.KV.Password)
 	if err != nil {
 		return err
 	}
 
 	serviceHandler := service.WrapWithTracing(
-		service.NewServiceHandler(s.store, kvStore, s.ca, s.log, s.cfg.Service.AgentEndpointAddress, s.cfg.Service.BaseUIUrl))
+		service.NewServiceHandler(s.store, workerClient, kvStore, s.ca, s.log, s.cfg.Service.AgentEndpointAddress, s.cfg.Service.BaseUIUrl))
 
 	httpAPIHandler, err := s.prepareHTTPHandler(serviceHandler)
 	if err != nil {

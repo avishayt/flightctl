@@ -3,26 +3,32 @@ package service
 import (
 	"context"
 	"reflect"
+	"strconv"
 
 	api "github.com/flightctl/flightctl/api/v1alpha1"
+	"github.com/flightctl/flightctl/internal/consts"
 	"github.com/flightctl/flightctl/internal/service/common"
 	"github.com/flightctl/flightctl/internal/store"
 	"github.com/flightctl/flightctl/internal/util"
+	"github.com/flightctl/flightctl/internal/worker_client"
 	"github.com/google/uuid"
+	"github.com/samber/lo"
 	"github.com/sirupsen/logrus"
 )
 
 // EventHandler handles all event emission logic for the service
 type EventHandler struct {
-	store store.Store
-	log   logrus.FieldLogger
+	store        store.Store
+	log          logrus.FieldLogger
+	workerClient worker_client.WorkerClient
 }
 
 // NewEventHandler creates a new EventHandler instance
-func NewEventHandler(store store.Store, log logrus.FieldLogger) *EventHandler {
+func NewEventHandler(store store.Store, log logrus.FieldLogger, workerClient worker_client.WorkerClient) *EventHandler {
 	return &EventHandler{
-		store: store,
-		log:   log,
+		store:        store,
+		log:          log,
+		workerClient: workerClient,
 	}
 }
 
@@ -37,6 +43,9 @@ func (h *EventHandler) CreateEvent(ctx context.Context, event *api.Event) {
 	err := h.store.Event().Create(ctx, orgId, event)
 	if err != nil {
 		h.log.Errorf("failed emitting <%s> resource updated %s event for %s %s/%s: %v", *event.Metadata.Name, event.Reason, event.InvolvedObject.Kind, orgId, event.InvolvedObject.Name, err)
+	} else {
+		// Emit event to workers
+		h.workerClient.EmitEvent(ctx, event)
 	}
 }
 
@@ -72,7 +81,14 @@ func (h *EventHandler) HandleGenericResourceDeletedEvents(ctx context.Context, r
 func (h *EventHandler) HandleDeviceUpdatedEvents(ctx context.Context, resourceKind api.ResourceKind, orgId uuid.UUID, name string, oldResource, newResource interface{}, created bool, err error) {
 	if err != nil {
 		status := StoreErrorToApiStatus(err, created, api.DeviceKind, &name)
-		h.CreateEvent(ctx, common.GetResourceCreatedOrUpdatedFailureEvent(ctx, created, api.DeviceKind, name, status, nil))
+		event := common.GetResourceCreatedOrUpdatedFailureEvent(ctx, created, api.DeviceKind, name, status, nil)
+		delayDeviceRender, ok := ctx.Value(consts.DelayDeviceRenderCtxKey).(bool)
+		if ok && delayDeviceRender {
+			event.Metadata.Annotations = lo.ToPtr(map[string]string{
+				api.EventAnnotationDelayDeviceRender: strconv.FormatBool(delayDeviceRender),
+			})
+		}
+		h.CreateEvent(ctx, event)
 		return
 	}
 	var (
@@ -85,7 +101,7 @@ func (h *EventHandler) HandleDeviceUpdatedEvents(ctx context.Context, resourceKi
 
 	// Only generate status change events when the device is not being created
 	if !created {
-		statusUpdates := common.ComputeDeviceStatusChanges(ctx, oldDevice, newDevice, orgId, h.store)
+		statusUpdates := common.ComputeDeviceStatusChanges(ctx, oldDevice, newDevice)
 		for _, update := range statusUpdates {
 			h.CreateEvent(ctx, common.GetDeviceEventFromUpdateDetails(ctx, name, update))
 		}
@@ -221,6 +237,16 @@ func (h *EventHandler) computeFleetResourceUpdatedDetails(oldFleet, newFleet *ap
 	if oldFleet.Metadata.Generation != nil && newFleet.Metadata.Generation != nil &&
 		*oldFleet.Metadata.Generation != *newFleet.Metadata.Generation {
 		updateDetails.UpdatedFields = append(updateDetails.UpdatedFields, api.Spec)
+
+		// Check if spec.selector changed
+		if !reflect.DeepEqual(oldFleet.Spec.Selector, newFleet.Spec.Selector) {
+			updateDetails.UpdatedFields = append(updateDetails.UpdatedFields, api.SpecSelector)
+		}
+
+		// Check if spec.template changed
+		if !api.DeviceSpecsAreEqual(oldFleet.Spec.Template.Spec, newFleet.Spec.Template.Spec) {
+			updateDetails.UpdatedFields = append(updateDetails.UpdatedFields, api.SpecTemplate)
+		}
 	}
 
 	// Check if labels changed

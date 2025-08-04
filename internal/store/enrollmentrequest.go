@@ -112,7 +112,7 @@ func (s *EnrollmentRequestStore) List(ctx context.Context, orgId uuid.UUID, list
 
 func (s *EnrollmentRequestStore) Delete(ctx context.Context, orgId uuid.UUID, name string, eventCallback EventCallback) error {
 	deleted, err := s.genericStore.Delete(ctx, model.EnrollmentRequest{Resource: model.Resource{OrgID: orgId, Name: name}})
-	if deleted {
+	if deleted && eventCallback != nil {
 		s.eventCallbackCaller(ctx, eventCallback, orgId, name, nil, nil, false, err)
 	}
 	return err

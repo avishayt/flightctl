@@ -337,7 +337,9 @@ func (s *DeviceStore) Delete(ctx context.Context, orgId uuid.UUID, name string, 
 		ctx,
 		model.Device{Resource: model.Resource{OrgID: orgId, Name: name}},
 		Resource{Table: "enrollment_requests", OrgID: orgId.String(), Name: name})
-	s.callEventCallback(ctx, eventCallback, orgId, name, nil, nil, false, err)
+	if deleted && eventCallback != nil {
+		s.callEventCallback(ctx, eventCallback, orgId, name, nil, nil, false, err)
+	}
 	return deleted, err
 }
 

@@ -15,7 +15,7 @@ import (
 	"github.com/flightctl/flightctl/internal/service"
 	"github.com/flightctl/flightctl/internal/store"
 	"github.com/flightctl/flightctl/internal/tasks"
-	"github.com/flightctl/flightctl/internal/tasks_client"
+	"github.com/flightctl/flightctl/internal/worker_client"
 	"github.com/flightctl/flightctl/pkg/queues"
 	"github.com/flightctl/flightctl/pkg/reqid"
 	"github.com/flightctl/flightctl/pkg/thread"
@@ -78,12 +78,12 @@ func (s *Server) Run(ctx context.Context) error {
 		return err
 	}
 
-	publisher, err := tasks_client.TaskQueuePublisher(queuesProvider)
+	publisher, err := worker_client.QueuePublisher(queuesProvider)
 	if err != nil {
 		return err
 	}
-	callbackManager := tasks_client.NewCallbackManager(publisher, s.log)
-	serviceHandler := service.WrapWithTracing(service.NewServiceHandler(s.store, callbackManager, kvStore, nil, s.log, "", ""))
+	workerClient := worker_client.NewWorkerClient(publisher, s.log)
+	serviceHandler := service.WrapWithTracing(service.NewServiceHandler(s.store, workerClient, kvStore, nil, s.log, "", ""))
 
 	// repository tester
 	repoTester := tasks.NewRepoTester(s.log, serviceHandler)
@@ -92,7 +92,7 @@ func (s *Server) Run(ctx context.Context) error {
 	defer repoTesterThread.Stop()
 
 	// resource sync
-	resourceSync := tasks.NewResourceSync(callbackManager, serviceHandler, s.log, s.cfg.GitOps.IgnoreResourceUpdates)
+	resourceSync := tasks.NewResourceSync(serviceHandler, s.log, s.cfg.GitOps.IgnoreResourceUpdates)
 	resourceSyncThread := s.newTaskThread(ctx, tasks.ResourceSyncTaskName, "ResourceSync", 2*time.Minute, resourceSync.Poll)
 	resourceSyncThread.Start()
 	defer resourceSyncThread.Stop()
@@ -104,13 +104,13 @@ func (s *Server) Run(ctx context.Context) error {
 	defer deviceDisconnectedThread.Stop()
 
 	// Rollout device selection
-	rolloutDeviceSelection := device_selection.NewReconciler(serviceHandler, callbackManager, s.log)
+	rolloutDeviceSelection := device_selection.NewReconciler(serviceHandler, s.log)
 	rolloutDeviceSelectionThread := s.newTaskThread(ctx, device_selection.DeviceSelectionTaskName, "Rollout device selection", device_selection.RolloutDeviceSelectionInterval, rolloutDeviceSelection.Reconcile)
 	rolloutDeviceSelectionThread.Start()
 	defer rolloutDeviceSelectionThread.Stop()
 
 	// Rollout disruption budget
-	disruptionBudget := disruption_budget.NewReconciler(serviceHandler, callbackManager, s.log)
+	disruptionBudget := disruption_budget.NewReconciler(serviceHandler, s.log)
 	disruptionBudgetThread := s.newTaskThread(ctx, disruption_budget.DisruptionBudgetTaskName, "Disruption budget", disruption_budget.DisruptionBudgetReconcilationInterval, disruptionBudget.Reconcile)
 	disruptionBudgetThread.Start()
 	defer disruptionBudgetThread.Stop()

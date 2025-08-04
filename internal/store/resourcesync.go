@@ -131,7 +131,9 @@ func (s *ResourceSyncStore) Delete(ctx context.Context, orgId uuid.UUID, name st
 		return callback(ctx, innerTx, orgId, *owner)
 	})
 
-	s.eventCallbackCaller(ctx, callbackEvent, orgId, name, nil, nil, false, err)
+	if callbackEvent != nil && !errors.Is(err, flterrors.ErrResourceNotFound) {
+		s.eventCallbackCaller(ctx, callbackEvent, orgId, name, nil, nil, false, err)
+	}
 	if err != nil {
 		if errors.Is(err, flterrors.ErrResourceNotFound) {
 			return nil

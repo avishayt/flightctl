@@ -45,9 +45,6 @@ type FleetStore struct {
 	genericStore *GenericStore[*model.Fleet, model.Fleet, api.Fleet, api.FleetList]
 }
 
-type FleetStoreCallback func(ctx context.Context, orgId uuid.UUID, before *api.Fleet, after *api.Fleet)
-type FleetStoreAllDeletedCallback func(ctx context.Context, orgId uuid.UUID)
-
 // Make sure we conform to Fleet interface
 var _ Fleet = (*FleetStore)(nil)
 
@@ -363,10 +360,12 @@ func (s *FleetStore) ListIgnoreOrg(ctx context.Context) ([]model.Fleet, error) {
 }
 
 func (s *FleetStore) Delete(ctx context.Context, orgId uuid.UUID, name string, eventCallback EventCallback) error {
-	_, err := s.genericStore.Delete(
+	deleted, err := s.genericStore.Delete(
 		ctx,
 		model.Fleet{Resource: model.Resource{OrgID: orgId, Name: name}})
-	s.callEventCallback(ctx, eventCallback, orgId, name, nil, nil, false, err)
+	if deleted && eventCallback != nil {
+		s.callEventCallback(ctx, eventCallback, orgId, name, nil, nil, false, err)
+	}
 	return err
 }
 func (s *FleetStore) UpdateStatus(ctx context.Context, orgId uuid.UUID, resource *api.Fleet) (*api.Fleet, error) {

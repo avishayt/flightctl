@@ -34,13 +34,13 @@ func testRepositoryPatch(require *require.Assertions, patch api.PatchRequest) (*
 	}
 
 	serviceHandler := ServiceHandler{
-		EventHandler:    NewEventHandler(&TestStore{}, logrus.New()),
-		store:           &TestStore{},
-		callbackManager: dummyCallbackManager(),
-		log:             logrus.New(),
+		EventHandler: NewEventHandler(&TestStore{}, logrus.New()),
+		store:        &TestStore{},
+		workerClient: &DummyWorkerClient{},
+		log:          logrus.New(),
 	}
 	ctx := context.Background()
-	_, err = serviceHandler.store.Repository().Create(ctx, store.NullOrgId, &repository, nil, nil)
+	_, err = serviceHandler.store.Repository().Create(ctx, store.NullOrgId, &repository, nil)
 	require.NoError(err)
 	resp, status := serviceHandler.PatchRepository(ctx, "foo", patch)
 	require.NotEqual(statusFailedCode, status.Code)
@@ -173,7 +173,7 @@ func TestRepositoryNonExistingResource(t *testing.T) {
 	ctx := context.Background()
 	_, err := serviceHandler.store.Repository().Create(ctx, store.NullOrgId, &api.Repository{
 		Metadata: api.ObjectMeta{Name: lo.ToPtr("foo")},
-	}, nil, nil)
+	}, nil)
 	require.NoError(err)
 	_, status := serviceHandler.PatchRepository(ctx, "bar", pr)
 	require.Equal(statusNotFoundCode, status.Code)

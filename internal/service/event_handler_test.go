@@ -27,10 +27,10 @@ import (
 func serviceHandler() *ServiceHandler {
 	testStore := &TestStore{}
 	return &ServiceHandler{
-		EventHandler:    NewEventHandler(testStore, logrus.New()),
-		store:           testStore,
-		callbackManager: dummyCallbackManager(),
-		log:             logrus.New(),
+		EventHandler: NewEventHandler(testStore, logrus.New()),
+		store:        testStore,
+		workerClient: &DummyWorkerClient{},
+		log:          logrus.New(),
 	}
 }
 
@@ -541,7 +541,7 @@ func TestEventEnrollmentRequestApproved(t *testing.T) {
 			status := StoreErrorToApiStatus(err, created, api.EnrollmentRequestKind, &name)
 			serviceHandler.CreateEvent(ctx, common.GetResourceCreatedOrUpdatedFailureEvent(ctx, created, api.EnrollmentRequestKind, name, status, nil))
 		} else {
-			serviceHandler.CreateEvent(ctx, common.GetResourceCreatedOrUpdatedSuccessEvent(ctx, created, api.EnrollmentRequestKind, name, nil, serviceHandler.log))
+			serviceHandler.CreateEvent(ctx, common.GetResourceCreatedOrUpdatedSuccessEvent(ctx, created, api.EnrollmentRequestKind, name, nil, serviceHandler.log, nil))
 		}
 	}
 	_, err = serviceHandler.store.EnrollmentRequest().Create(ctx, store.NullOrgId, &er, eventCallback)
@@ -727,9 +727,9 @@ func TestGetInternalTaskFailedEvent(t *testing.T) {
 	taskType := "sync"
 	errorMessage := "connection timeout"
 	retryCount := lo.ToPtr(3)
-	taskParameters := map[string]string{"param1": "value1", "param2": "value2"}
+	originalEventJson := "{\"kind\":\"Device\",\"name\":\"test-device\",\"reason\":\"ResourceUpdated\",\"details\":{\"newOwner\":\"fleet2\",\"previousOwner\":\"fleet1\",\"updatedFields\":[\"Owner\"]}}"
 
-	event := common.GetInternalTaskFailedEvent(ctx, resourceKind, resourceName, taskType, errorMessage, retryCount, taskParameters, logger)
+	event := common.GetInternalTaskFailedEvent(ctx, resourceKind, resourceName, taskType, errorMessage, retryCount, originalEventJson, logger)
 
 	require.NotNil(event)
 	require.Equal(resourceKind, api.ResourceKind(event.InvolvedObject.Kind))
@@ -746,7 +746,7 @@ func TestGetInternalTaskFailedEvent(t *testing.T) {
 	require.Equal(taskType, detailsStruct.TaskType)
 	require.Equal(errorMessage, detailsStruct.ErrorMessage)
 	require.Equal(retryCount, detailsStruct.RetryCount)
-	require.Equal(&taskParameters, detailsStruct.TaskParameters)
+	require.Equal(&originalEventJson, detailsStruct.OriginalEventJson)
 }
 
 func TestGetResourceCreatedOrUpdatedEvent(t *testing.T) {
@@ -763,7 +763,7 @@ func TestGetResourceCreatedOrUpdatedEvent(t *testing.T) {
 	}
 
 	t.Run("Created", func(t *testing.T) {
-		event := common.GetResourceCreatedOrUpdatedSuccessEvent(ctx, true, resourceKind, resourceName, nil, logger)
+		event := common.GetResourceCreatedOrUpdatedSuccessEvent(ctx, true, resourceKind, resourceName, nil, logger, nil)
 
 		require.NotNil(event)
 		require.Equal(resourceKind, api.ResourceKind(event.InvolvedObject.Kind))
@@ -776,7 +776,7 @@ func TestGetResourceCreatedOrUpdatedEvent(t *testing.T) {
 	})
 
 	t.Run("Updated", func(t *testing.T) {
-		event := common.GetResourceCreatedOrUpdatedSuccessEvent(ctx, false, resourceKind, resourceName, updateDetails, logger)
+		event := common.GetResourceCreatedOrUpdatedSuccessEvent(ctx, false, resourceKind, resourceName, updateDetails, logger, nil)
 
 		require.NotNil(event)
 		require.Equal(resourceKind, api.ResourceKind(event.InvolvedObject.Kind))
@@ -795,7 +795,7 @@ func TestGetResourceCreatedOrUpdatedEvent(t *testing.T) {
 	})
 
 	t.Run("UpdatedWithNilDetails", func(t *testing.T) {
-		event := common.GetResourceCreatedOrUpdatedSuccessEvent(ctx, false, resourceKind, resourceName, nil, logger)
+		event := common.GetResourceCreatedOrUpdatedSuccessEvent(ctx, false, resourceKind, resourceName, nil, logger, nil)
 
 		require.Nil(event)
 	})
@@ -804,7 +804,7 @@ func TestGetResourceCreatedOrUpdatedEvent(t *testing.T) {
 		emptyUpdateDetails := &api.ResourceUpdatedDetails{
 			UpdatedFields: []api.ResourceUpdatedDetailsUpdatedFields{},
 		}
-		event := common.GetResourceCreatedOrUpdatedSuccessEvent(ctx, false, resourceKind, resourceName, emptyUpdateDetails, logger)
+		event := common.GetResourceCreatedOrUpdatedSuccessEvent(ctx, false, resourceKind, resourceName, emptyUpdateDetails, logger, nil)
 
 		require.Nil(event)
 	})

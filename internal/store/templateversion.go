@@ -16,13 +16,13 @@ import (
 type TemplateVersion interface {
 	InitialMigration(ctx context.Context) error
 
-	Create(ctx context.Context, orgId uuid.UUID, templateVersion *api.TemplateVersion, callback TemplateVersionStoreCallback, eventCallback EventCallback) (*api.TemplateVersion, error)
+	Create(ctx context.Context, orgId uuid.UUID, templateVersion *api.TemplateVersion, eventCallback EventCallback) (*api.TemplateVersion, error)
 	Get(ctx context.Context, orgId uuid.UUID, fleet string, name string) (*api.TemplateVersion, error)
 	List(ctx context.Context, orgId uuid.UUID, listParams ListParams) (*api.TemplateVersionList, error)
 	Delete(ctx context.Context, orgId uuid.UUID, fleet string, name string, eventCallback EventCallback) (bool, error)
 
 	GetLatest(ctx context.Context, orgId uuid.UUID, fleet string) (*api.TemplateVersion, error)
-	UpdateStatus(ctx context.Context, orgId uuid.UUID, resource *api.TemplateVersion, valid *bool, callback TemplateVersionStoreCallback) error
+	UpdateStatus(ctx context.Context, orgId uuid.UUID, resource *api.TemplateVersion, valid *bool) error
 }
 
 type TemplateVersionStore struct {
@@ -31,8 +31,6 @@ type TemplateVersionStore struct {
 	genericStore        *GenericStore[*model.TemplateVersion, model.TemplateVersion, api.TemplateVersion, api.TemplateVersionList]
 	eventCallbackCaller EventCallbackCaller
 }
-
-type TemplateVersionStoreCallback func(context.Context, uuid.UUID, *api.TemplateVersion, *api.TemplateVersion)
 
 // Make sure we conform to TemplateVersion interface
 var _ TemplateVersion = (*TemplateVersionStore)(nil)
@@ -88,8 +86,8 @@ func (s *TemplateVersionStore) InitialMigration(ctx context.Context) error {
 	return nil
 }
 
-func (s *TemplateVersionStore) Create(ctx context.Context, orgId uuid.UUID, resource *api.TemplateVersion, callback TemplateVersionStoreCallback, eventCallback EventCallback) (*api.TemplateVersion, error) {
-	tv, err := s.genericStore.Create(ctx, orgId, resource, callback)
+func (s *TemplateVersionStore) Create(ctx context.Context, orgId uuid.UUID, resource *api.TemplateVersion, eventCallback EventCallback) (*api.TemplateVersion, error) {
+	tv, err := s.genericStore.Create(ctx, orgId, resource)
 	s.eventCallbackCaller(ctx, eventCallback, orgId, lo.FromPtr(resource.Metadata.Name), nil, tv, true, err)
 	return tv, err
 }
@@ -123,14 +121,14 @@ func (s *TemplateVersionStore) GetLatest(ctx context.Context, orgId uuid.UUID, f
 }
 
 func (s *TemplateVersionStore) Delete(ctx context.Context, orgId uuid.UUID, fleet string, name string, eventCallback EventCallback) (bool, error) {
-	deleted, err := s.genericStore.Delete(ctx, model.TemplateVersion{OrgID: orgId, Name: name, FleetName: fleet}, nil)
+	deleted, err := s.genericStore.Delete(ctx, model.TemplateVersion{OrgID: orgId, Name: name, FleetName: fleet})
 	if deleted {
 		s.eventCallbackCaller(ctx, eventCallback, orgId, name, nil, nil, false, err)
 	}
 	return deleted, err
 }
 
-func (s *TemplateVersionStore) UpdateStatus(ctx context.Context, orgId uuid.UUID, resource *api.TemplateVersion, valid *bool, callback TemplateVersionStoreCallback) error {
+func (s *TemplateVersionStore) UpdateStatus(ctx context.Context, orgId uuid.UUID, resource *api.TemplateVersion, valid *bool) error {
 	if resource == nil {
 		return flterrors.ErrResourceIsNil
 	}
@@ -157,9 +155,5 @@ func (s *TemplateVersionStore) UpdateStatus(ctx context.Context, orgId uuid.UUID
 		return ErrorFromGormError(result.Error)
 	}
 
-	if valid != nil && *valid && callback != nil {
-		apiResource, _ := templateVersion.ToApiResource()
-		callback(ctx, orgId, nil, apiResource)
-	}
 	return nil
 }

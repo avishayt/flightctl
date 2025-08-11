@@ -14,7 +14,6 @@ import (
 	"github.com/flightctl/flightctl/internal/rollout"
 	"github.com/flightctl/flightctl/internal/service"
 	"github.com/flightctl/flightctl/internal/store/selector"
-	"github.com/flightctl/flightctl/internal/tasks_client"
 	"github.com/flightctl/flightctl/internal/util"
 	"github.com/samber/lo"
 	"github.com/sirupsen/logrus"
@@ -41,46 +40,40 @@ import (
 //
 // This design ensures the task can be run repeatedly without side effects.
 
-func fleetRollout(ctx context.Context, resourceRef *tasks_client.ResourceReference, serviceHandler service.Service, callbackManager tasks_client.CallbackManager, log logrus.FieldLogger) error {
-	if resourceRef.Op != tasks_client.FleetRolloutOpUpdate {
-		log.Errorf("received unknown op %s", resourceRef.Op)
-		return nil
-	}
-	logic := NewFleetRolloutsLogic(callbackManager, log, serviceHandler, *resourceRef)
-	switch resourceRef.Kind {
+func fleetRollout(ctx context.Context, event api.Event, serviceHandler service.Service, log logrus.FieldLogger) error {
+	logic := NewFleetRolloutsLogic(log, serviceHandler, event)
+	switch event.InvolvedObject.Kind {
 	case api.FleetKind:
 		err := logic.RolloutFleet(ctx)
 		if err != nil {
-			log.Errorf("failed rolling out fleet %s/%s: %v", resourceRef.OrgID, resourceRef.Name, err)
+			log.Errorf("failed rolling out fleet %s/%s: %v", api.NullOrgId, event.InvolvedObject.Name, err)
 		}
 		return err
 	case api.DeviceKind:
 		err := logic.RolloutDevice(ctx)
 		if err != nil {
-			log.Errorf("failed rolling out device %s/%s: %v", resourceRef.OrgID, resourceRef.Name, err)
+			log.Errorf("failed rolling out device %s/%s: %v", api.NullOrgId, event.InvolvedObject.Name, err)
 		}
 		return err
 	default:
-		return fmt.Errorf("FleetRollouts called with incorrect resource kind %s", resourceRef.Kind)
+		return fmt.Errorf("FleetRollouts called with incorrect resource kind %s", event.InvolvedObject.Kind)
 	}
 }
 
 type FleetRolloutsLogic struct {
-	callbackManager tasks_client.CallbackManager
-	log             logrus.FieldLogger
-	serviceHandler  service.Service
-	resourceRef     tasks_client.ResourceReference
-	itemsPerPage    int
-	owner           string
+	log            logrus.FieldLogger
+	serviceHandler service.Service
+	event          api.Event
+	itemsPerPage   int
+	owner          string
 }
 
-func NewFleetRolloutsLogic(callbackManager tasks_client.CallbackManager, log logrus.FieldLogger, serviceHandler service.Service, resourceRef tasks_client.ResourceReference) FleetRolloutsLogic {
+func NewFleetRolloutsLogic(log logrus.FieldLogger, serviceHandler service.Service, event api.Event) FleetRolloutsLogic {
 	return FleetRolloutsLogic{
-		callbackManager: callbackManager,
-		log:             log,
-		serviceHandler:  serviceHandler,
-		resourceRef:     resourceRef,
-		itemsPerPage:    ItemsPerPage,
+		log:            log,
+		serviceHandler: serviceHandler,
+		event:          event,
+		itemsPerPage:   ItemsPerPage,
 	}
 }
 
@@ -89,19 +82,19 @@ func (f *FleetRolloutsLogic) SetItemsPerPage(items int) {
 }
 
 func (f FleetRolloutsLogic) RolloutFleet(ctx context.Context) error {
-	fleet, status := f.serviceHandler.GetFleet(ctx, f.resourceRef.Name, api.GetFleetParams{})
+	fleet, status := f.serviceHandler.GetFleet(ctx, f.event.InvolvedObject.Name, api.GetFleetParams{})
 	if status.Code != http.StatusOK {
-		return fmt.Errorf("failed to get fleet %s/%s: %s", f.resourceRef.OrgID, f.resourceRef.Name, status.Message)
+		return fmt.Errorf("failed to get fleet %s/%s: %s", api.NullOrgId, f.event.InvolvedObject.Name, status.Message)
 	}
-	f.log.Infof("Rolling out fleet %s/%s", f.resourceRef.OrgID, f.resourceRef.Name)
+	f.log.Infof("Rolling out fleet %s/%s", api.NullOrgId, f.event.InvolvedObject.Name)
 
-	templateVersion, status := f.serviceHandler.GetLatestTemplateVersion(ctx, f.resourceRef.Name)
+	templateVersion, status := f.serviceHandler.GetLatestTemplateVersion(ctx, f.event.InvolvedObject.Name)
 	if status.Code != http.StatusOK {
 		return fmt.Errorf("failed to get templateVersion: %s", status.Message)
 	}
 
 	failureCount := 0
-	owner := util.SetResourceOwner(api.FleetKind, f.resourceRef.Name)
+	owner := util.SetResourceOwner(api.FleetKind, f.event.InvolvedObject.Name)
 	f.owner = *owner
 
 	listParams := api.ListDevicesParams{
@@ -135,7 +128,7 @@ func (f FleetRolloutsLogic) RolloutFleet(ctx context.Context) error {
 			device := &devices.Items[devIndex]
 			err := f.updateDeviceToFleetTemplate(ctx, device, templateVersion, delayDeviceRender)
 			if err != nil {
-				f.log.Errorf("failed to update target generation for device %s (fleet %s): %v", *device.Metadata.Name, f.resourceRef.Name, err)
+				f.log.Errorf("failed to update target generation for device %s (fleet %s): %v", *device.Metadata.Name, f.event.InvolvedObject.Name, err)
 				failureCount++
 			}
 		}
@@ -156,9 +149,9 @@ func (f FleetRolloutsLogic) RolloutFleet(ctx context.Context) error {
 
 // The device's owner was changed, roll out if necessary
 func (f FleetRolloutsLogic) RolloutDevice(ctx context.Context) error {
-	f.log.Infof("Rolling out device %s/%s", f.resourceRef.OrgID, f.resourceRef.Name)
+	f.log.Infof("Rolling out device %s/%s", api.NullOrgId, f.event.InvolvedObject.Name)
 
-	device, status := f.serviceHandler.GetDevice(ctx, f.resourceRef.Name)
+	device, status := f.serviceHandler.GetDevice(ctx, f.event.InvolvedObject.Name)
 	if status.Code != http.StatusOK {
 		return fmt.Errorf("failed to get device: %s", status.Message)
 	}
@@ -168,7 +161,7 @@ func (f FleetRolloutsLogic) RolloutDevice(ctx context.Context) error {
 	}
 
 	if api.IsStatusConditionTrue(device.Status.Conditions, api.ConditionTypeDeviceMultipleOwners) {
-		f.log.Errorf("Device %s has multiple owners, skipping rollout", f.resourceRef.Name)
+		f.log.Errorf("Device %s has multiple owners, skipping rollout", f.event.InvolvedObject.Name)
 		return nil
 	}
 
@@ -196,7 +189,7 @@ func (f FleetRolloutsLogic) RolloutDevice(ctx context.Context) error {
 	}
 	if rolloutProgressStage == rollout.ConfiguredBatch {
 		// If a rollout is in progress, then the device will be rolled out by one of the next batches
-		f.log.Infof("Rollout is in progress for fleet %v/%s. Skipping device %s rollout", f.resourceRef.OrgID, lo.FromPtr(fleet.Metadata.Name), f.resourceRef.Name)
+		f.log.Infof("Rollout is in progress for fleet %v/%s. Skipping device %s rollout", api.NullOrgId, lo.FromPtr(fleet.Metadata.Name), f.event.InvolvedObject.Name)
 		return nil
 	}
 	delayDeviceRender := fleet.Spec.RolloutPolicy != nil && fleet.Spec.RolloutPolicy.DisruptionBudget != nil
@@ -237,7 +230,7 @@ func (f FleetRolloutsLogic) updateDeviceToFleetTemplate(ctx context.Context, dev
 		if status.Code != http.StatusOK {
 			errs = append(errs, service.ApiStatusToErr(status))
 		}
-		return fmt.Errorf("failed generating device spec for %s/%s: %w", f.resourceRef.OrgID, *device.Metadata.Name, errors.Join(errs...))
+		return fmt.Errorf("failed generating device spec for %s/%s: %w", api.NullOrgId, *device.Metadata.Name, errors.Join(errs...))
 	}
 
 	newDeviceSpec := api.DeviceSpec{
@@ -251,15 +244,15 @@ func (f FleetRolloutsLogic) updateDeviceToFleetTemplate(ctx context.Context, dev
 
 	errs = newDeviceSpec.Validate(false)
 	if len(errs) > 0 {
-		return fmt.Errorf("failed validating device spec for %s/%s: %w", f.resourceRef.OrgID, *device.Metadata.Name, errors.Join(errs...))
+		return fmt.Errorf("failed validating device spec for %s/%s: %w", api.NullOrgId, *device.Metadata.Name, errors.Join(errs...))
 	}
 
 	if currentVersion == *templateVersion.Metadata.Name && api.DeviceSpecsAreEqual(newDeviceSpec, *device.Spec) {
-		f.log.Debugf("Not rolling out device %s/%s because it is already at templateVersion %s", f.resourceRef.OrgID, *device.Metadata.Name, *templateVersion.Metadata.Name)
+		f.log.Debugf("Not rolling out device %s/%s because it is already at templateVersion %s", api.NullOrgId, *device.Metadata.Name, *templateVersion.Metadata.Name)
 		return nil
 	}
 
-	f.log.Infof("Rolling out device %s/%s to templateVersion %s", f.resourceRef.OrgID, *device.Metadata.Name, *templateVersion.Metadata.Name)
+	f.log.Infof("Rolling out device %s/%s to templateVersion %s", api.NullOrgId, *device.Metadata.Name, *templateVersion.Metadata.Name)
 	err := f.updateDeviceInStore(ctx, device, &newDeviceSpec, delayDeviceRender)
 	if err != nil {
 		return fmt.Errorf("failed updating device spec: %w", err)

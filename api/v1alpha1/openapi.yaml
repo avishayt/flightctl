@@ -5755,11 +5755,9 @@ components:
         retryCount:
           type: integer
           description: Number of times the task has been retried.
-        taskParameters:
-          type: object
-          additionalProperties:
-            type: string
-          description: Parameters needed to retry the task.
+        originalEventJson:
+          type: string
+          description: The original event that triggered the internal task, serialized as JSON.
     ResourceSyncCompletedDetails:
       type: object
       required:

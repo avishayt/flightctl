@@ -1531,11 +1531,11 @@ type InternalTaskFailedDetails struct {
 	// ErrorMessage The error message describing the failure.
 	ErrorMessage string `json:"errorMessage"`
 
+	// OriginalEventJson The original event that triggered the internal task, serialized as JSON.
+	OriginalEventJson *string `json:"originalEventJson,omitempty"`
+
 	// RetryCount Number of times the task has been retried.
 	RetryCount *int `json:"retryCount,omitempty"`
-
-	// TaskParameters Parameters needed to retry the task.
-	TaskParameters *map[string]string `json:"taskParameters,omitempty"`
 
 	// TaskType The type of internal task that failed.
 	TaskType string `json:"taskType"`

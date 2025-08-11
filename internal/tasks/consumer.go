@@ -10,76 +10,74 @@ import (
 	"github.com/flightctl/flightctl/internal/instrumentation/tracing"
 	"github.com/flightctl/flightctl/internal/kvstore"
 	"github.com/flightctl/flightctl/internal/service"
-	"github.com/flightctl/flightctl/internal/tasks_client"
 	"github.com/flightctl/flightctl/pkg/k8sclient"
 	"github.com/flightctl/flightctl/pkg/queues"
+	"github.com/samber/lo"
 	"github.com/sirupsen/logrus"
 	"go.opentelemetry.io/otel/attribute"
 )
 
-func dispatchTasks(serviceHandler service.Service, callbackManager tasks_client.CallbackManager, k8sClient k8sclient.K8SClient, kvStore kvstore.KVStore) queues.ConsumeHandler {
+func dispatchTasks(serviceHandler service.Service, k8sClient k8sclient.K8SClient, kvStore kvstore.KVStore) queues.ConsumeHandler {
 	return func(ctx context.Context, payload []byte, log logrus.FieldLogger) error {
-		var reference tasks_client.ResourceReference
-		if err := json.Unmarshal(payload, &reference); err != nil {
+		var event api.Event
+		if err := json.Unmarshal(payload, &event); err != nil {
 			log.WithError(err).Error("failed to unmarshal consume payload")
 			return err
 		}
 
-		ctx, span := tracing.StartSpan(ctx, "flightctl/tasks", reference.TaskName)
+		ctx, span := tracing.StartSpan(ctx, "flightctl/worker", fmt.Sprintf("%s-%s", event.InvolvedObject.Kind, event.Reason))
 		defer span.End()
 
 		span.SetAttributes(
-			attribute.String("reference.task_name", reference.TaskName),
-			attribute.String("reference.op", reference.Op),
-			attribute.String("reference.org_id", reference.OrgID.String()),
-			attribute.String("reference.kind", reference.Kind),
-			attribute.String("reference.name", reference.Name),
-			attribute.String("reference.owner", reference.Owner),
+			attribute.String("event.kind", event.InvolvedObject.Kind),
+			attribute.String("event.name", event.InvolvedObject.Name),
+			attribute.String("event.reason", string(event.Reason)),
 		)
 
-		log.Infof("dispatching task %s, op %s, kind %s, orgID %s, name %s",
-			reference.TaskName, reference.Op, reference.Kind, reference.OrgID, reference.Name)
+		log.Infof("reconciling %s, reason %s, kind %s, name %s",
+			event.InvolvedObject.Kind, event.Reason, event.InvolvedObject.Name)
 
 		var err error
-		switch reference.TaskName {
-		case tasks_client.FleetRolloutTask:
-			err = fleetRollout(ctx, &reference, serviceHandler, callbackManager, log)
-		case tasks_client.FleetSelectorMatchTask:
-			err = fleetSelectorMatching(ctx, &reference, serviceHandler, callbackManager, log)
-		case tasks_client.FleetValidateTask:
-			err = fleetValidate(ctx, &reference, serviceHandler, callbackManager, k8sClient, log)
-		case tasks_client.DeviceRenderTask:
-			err = deviceRender(ctx, &reference, serviceHandler, callbackManager, k8sClient, kvStore, log)
-		case tasks_client.RepositoryUpdatesTask:
-			err = repositoryUpdate(ctx, &reference, serviceHandler, callbackManager, log)
-		default:
-			err = fmt.Errorf("unexpected task name %s", reference.TaskName)
+		var taskName string
+
+		if shouldRolloutFleet(ctx, event, log) {
+			taskName = "fleetRollout"
+			err = fleetRollout(ctx, event, serviceHandler, log)
+		} else if shouldReconcileDeviceOwnership(ctx, event, log) {
+			taskName = "fleetSelectorMatching"
+			err = fleetSelectorMatching(ctx, event, serviceHandler, log)
+		} else if shouldValidateFleet(ctx, event, log) {
+			taskName = "fleetValidation"
+			err = fleetValidate(ctx, event, serviceHandler, k8sClient, log)
+		} else if shouldRenderDevice(ctx, event, log) {
+			taskName = "deviceRender"
+			err = deviceRender(ctx, event, serviceHandler, k8sClient, kvStore, log)
+		} else if shouldUpdateRepositoryReferers(ctx, event, log) {
+			taskName = "repositoryUpdate"
+			err = repositoryUpdate(ctx, event, serviceHandler, log)
 		}
 
 		// Emit InternalTaskFailedEvent for any unhandled task failures
 		// This serves as a safety net while preserving specific error handling within tasks
 		if err != nil {
-			log.WithError(err).Errorf("task %s failed", reference.TaskName)
+			log.WithError(err).Errorf("task %s failed", taskName)
 
-			// Build task parameters for the event
-			taskParameters := map[string]string{
-				"orgId":        reference.OrgID.String(),
-				"resourceName": reference.Name,
-				"resourceKind": reference.Kind,
-				"operation":    reference.Op,
-				"taskName":     reference.TaskName,
+			originalEventJson, err := json.Marshal(event)
+			if err != nil {
+				log.WithError(err).Error("failed to marshal original event")
+				return err
 			}
 
 			// Create the event using api package
-			event := api.GetBaseEvent(ctx, api.ResourceKind(reference.Kind), reference.Name, api.EventReasonInternalTaskFailed,
-				fmt.Sprintf("%s internal task failed: %s - %s.", api.ResourceKind(reference.Kind), reference.TaskName, err.Error()), nil)
+			event := api.GetBaseEvent(ctx, api.ResourceKind(event.InvolvedObject.Kind), event.InvolvedObject.Name, api.EventReasonInternalTaskFailed,
+				fmt.Sprintf("%s internal task failed: %s - %s.", api.ResourceKind(event.InvolvedObject.Kind), taskName, err.Error()), nil)
 
 			details := api.EventDetails{}
 			if err := details.FromInternalTaskFailedDetails(api.InternalTaskFailedDetails{
-				TaskType:       reference.TaskName,
-				ErrorMessage:   err.Error(),
-				RetryCount:     nil,
-				TaskParameters: &taskParameters,
+				TaskType:          taskName,
+				ErrorMessage:      err.Error(),
+				RetryCount:        nil,
+				OriginalEventJson: lo.ToPtr(string(originalEventJson)),
 			}); err == nil {
 				event.Details = &details
 			}
@@ -87,15 +85,121 @@ func dispatchTasks(serviceHandler service.Service, callbackManager tasks_client.
 			// Emit the event
 			serviceHandler.CreateEvent(ctx, event)
 		}
-
-		return err
+		return nil
 	}
+}
+
+func shouldRolloutFleet(ctx context.Context, event api.Event, log logrus.FieldLogger) bool {
+	// If a devices's owner or labels were updated, and the delayDeviceRender annotation is set, return true
+	if event.Reason != api.EventReasonResourceUpdated && event.InvolvedObject.Kind == api.DeviceKind {
+		if event.Metadata.Annotations != nil {
+			if _, ok := (*event.Metadata.Annotations)[api.EventAnnotationDelayDeviceRender]; ok {
+				return false
+			}
+		}
+		if hasUpdatedFields(event.Details, log, api.Owner, api.Labels) {
+			return true
+		}
+		return false
+	}
+
+	// If we got a rollout started event and it's immediate, return true
+	if event.Reason == api.EventReasonFleetRolloutStarted && event.Details != nil {
+		details, err := event.Details.AsFleetRolloutStartedDetails()
+		if err != nil {
+			log.WithError(err).Error("failed to convert event details to fleet rollout started details")
+			return false
+		}
+		return details.RolloutStrategy == api.None
+	}
+
+	// TODO: Handle FleetRolloutSelectionUpdated
+
+	return false
+}
+
+func shouldReconcileDeviceOwnership(ctx context.Context, event api.Event, log logrus.FieldLogger) bool {
+	// If a fleet's label selector was updated, return true
+	if event.Reason != api.EventReasonResourceUpdated && event.InvolvedObject.Kind == api.FleetKind {
+		if hasUpdatedFields(event.Details, log, api.SpecSelector) {
+			return true
+		}
+		return false
+	}
+
+	// If a device's labels were updated, return true
+	if event.Reason != api.EventReasonResourceUpdated && event.InvolvedObject.Kind == api.DeviceKind {
+		if hasUpdatedFields(event.Details, log, api.Labels) {
+			return true
+		}
+		return false
+	}
+
+	return false
+}
+
+func shouldValidateFleet(ctx context.Context, event api.Event, log logrus.FieldLogger) bool {
+	// If a fleet's template was updated, return true
+	if event.Reason != api.EventReasonResourceUpdated && event.InvolvedObject.Kind == api.FleetKind {
+		if hasUpdatedFields(event.Details, log, api.SpecTemplate) {
+			return true
+		}
+		return false
+	}
+
+	// If a repository that the fleet is associated with was updated, return true
+	if event.Reason == api.EventReasonReferencedRepositoryUpdated && event.InvolvedObject.Kind == api.FleetKind {
+		return true
+	}
+
+	return false
+}
+
+func shouldRenderDevice(ctx context.Context, event api.Event, log logrus.FieldLogger) bool {
+	// If a repository that the device is associated with was updated, return true
+	if event.Reason == api.EventReasonReferencedRepositoryUpdated && event.InvolvedObject.Kind == api.DeviceKind {
+		return true
+	}
+
+	// TODO: If a device is ready to be rendered due to disruption budget, return true
+
+	return false
+}
+
+func shouldUpdateRepositoryReferers(ctx context.Context, event api.Event, log logrus.FieldLogger) bool {
+	// If a repository was updated, return true
+	if event.Reason != api.EventReasonResourceUpdated && event.InvolvedObject.Kind == api.RepositoryKind {
+		if hasUpdatedFields(event.Details, log, api.SpecTemplate) {
+			return true
+		}
+		return false
+	}
+	return false
+}
+
+func hasUpdatedFields(details *api.EventDetails, log logrus.FieldLogger, fields ...api.ResourceUpdatedDetailsUpdatedFields) bool {
+	if details == nil {
+		return false
+	}
+
+	updateDetails, err := details.AsResourceUpdatedDetails()
+	if err != nil {
+		log.WithError(err).Error("failed to convert event details to resource updated details")
+		return false
+	}
+
+	updatedFields := updateDetails.UpdatedFields
+	for _, field := range updatedFields {
+		if lo.Contains(fields, field) {
+			return true
+		}
+	}
+	return false
 }
 
 func LaunchConsumers(ctx context.Context,
 	queuesProvider queues.Provider,
 	serviceHandler service.Service,
-	callbackManager tasks_client.CallbackManager,
 	k8sClient k8sclient.K8SClient,
 	kvStore kvstore.KVStore,
 	numConsumers, threadsPerConsumer int) error {
@@ -105,7 +209,7 @@ func LaunchConsumers(ctx context.Context,
 			return err
 		}
 		for j := 0; j != threadsPerConsumer; j++ {
-			if err = consumer.Consume(ctx, dispatchTasks(serviceHandler, callbackManager, k8sClient, kvStore)); err != nil {
+			if err = consumer.Consume(ctx, dispatchTasks(serviceHandler, k8sClient, kvStore)); err != nil {
 				return err
 			}
 		}

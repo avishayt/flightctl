@@ -12,7 +12,7 @@ import (
 	"github.com/flightctl/flightctl/internal/service"
 	"github.com/flightctl/flightctl/internal/store"
 	"github.com/flightctl/flightctl/internal/tasks"
-	"github.com/flightctl/flightctl/internal/tasks_client"
+	"github.com/flightctl/flightctl/internal/worker_client"
 	flightlog "github.com/flightctl/flightctl/pkg/log"
 	"github.com/flightctl/flightctl/pkg/queues"
 	testutil "github.com/flightctl/flightctl/test/util"
@@ -33,8 +33,8 @@ var _ = Describe("DeviceDisconnected", func() {
 		serviceHandler   service.Service
 		cfg              *config.Config
 		dbName           string
-		callbackManager  tasks_client.CallbackManager
 		mockPublisher    *queues.MockPublisher
+		workerClient     *worker_client.MockWorkerClient
 		ctrl             *gomock.Controller
 		disconnectedTask *tasks.DeviceDisconnected
 	)
@@ -49,10 +49,10 @@ var _ = Describe("DeviceDisconnected", func() {
 		ctrl = gomock.NewController(GinkgoT())
 		mockPublisher = queues.NewMockPublisher(ctrl)
 		mockPublisher.EXPECT().Publish(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
-		callbackManager = tasks_client.NewCallbackManager(mockPublisher, log)
 		kvStore, err := kvstore.NewKVStore(ctx, log, "localhost", 6379, "adminpass")
+		workerClient = worker_client.NewMockWorkerClient(ctrl)
 		Expect(err).ToNot(HaveOccurred())
-		serviceHandler = service.NewServiceHandler(storeInst, callbackManager, kvStore, nil, log, "", "", []string{})
+		serviceHandler = service.NewServiceHandler(storeInst, workerClient, kvStore, nil, log, "", "", []string{})
 		disconnectedTask = tasks.NewDeviceDisconnected(log, serviceHandler)
 	})
 

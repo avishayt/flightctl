@@ -147,6 +147,14 @@ type QueueMaintenanceExecutor struct {
 func (e *QueueMaintenanceExecutor) Execute(ctx context.Context, log logrus.FieldLogger, orgID uuid.UUID) {
 	taskCtx := createTaskContext(ctx, PeriodicTaskTypeQueueMaintenance, orgID)
 
+	// Create publisher for event republishing during recovery
+	publisher, err := e.queuesProvider.NewPublisher(taskCtx, consts.TaskQueue)
+	if err != nil {
+		e.log.WithError(err).Error("Failed to create publisher for queue maintenance")
+		return
+	}
+	defer publisher.Close()
+
 	// Create and execute the queue maintenance task
 	// Note: Queue maintenance is system-wide, orgID is only used for context/tracing
 	task := tasks.NewQueueMaintenanceTask(e.log, e.serviceHandler, e.queuesProvider)

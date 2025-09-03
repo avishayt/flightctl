@@ -259,7 +259,7 @@ func (s *DeviceStore) createDeviceLabelsTrigger(db *gorm.DB) error {
 		triggerSQL := `
 		DROP TRIGGER IF EXISTS device_labels_insert ON devices;
 		DROP TRIGGER IF EXISTS device_labels_update ON devices;
-	
+
 		CREATE OR REPLACE FUNCTION sync_device_labels()
 		RETURNS TRIGGER AS $$
 		DECLARE
@@ -270,7 +270,7 @@ func (s *DeviceStore) createDeviceLabelsTrigger(db *gorm.DB) error {
 				WHERE org_id = OLD.org_id AND device_name = OLD.name
 				AND label_key NOT IN (SELECT jsonb_object_keys(NEW.labels));
 			END IF;
-	
+
 			FOR label IN SELECT * FROM jsonb_each_text(NEW.labels)
 			LOOP
 				INSERT INTO device_labels (org_id, device_name, label_key, label_value)
@@ -278,16 +278,16 @@ func (s *DeviceStore) createDeviceLabelsTrigger(db *gorm.DB) error {
 				ON CONFLICT (org_id, device_name, label_key) DO UPDATE
 				SET label_value = EXCLUDED.label_value;
 			END LOOP;
-	
+
 			RETURN NEW;
 		END;
 		$$ LANGUAGE plpgsql;
-	
+
 		CREATE TRIGGER device_labels_insert
 		AFTER INSERT ON devices
 		FOR EACH ROW
 		EXECUTE FUNCTION sync_device_labels();
-	
+
 		CREATE TRIGGER device_labels_update
 		AFTER UPDATE OF labels ON devices
 		FOR EACH ROW

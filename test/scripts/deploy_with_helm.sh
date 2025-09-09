@@ -105,8 +105,6 @@ helm upgrade --install --namespace flightctl-external \
                   ${ONLY_DB} ${DB_SIZE_PARAMS} ${AUTH_ARGS} ${SQL_ARG} ${GATEWAY_ARGS} ${KV_ARG} ${ORGS_ARGS} flightctl \
               ./deploy/helm/flightctl/ --kube-context kind-kind
 
-kubectl rollout status statefulset flightctl-kv -n flightctl-internal -w --timeout=300s
-
 "${SCRIPT_DIR}"/wait_for_postgres.sh
 
 # Make sure the database is usable from the unit tests

@@ -11,11 +11,6 @@ Network=flightctl.network
 Exec=/bin/sh -c 'redis-server /usr/local/etc/redis/redis.conf --requirepass $${KV_PASSWORD}'
 Secret=flightctl-kv-password,type=env,target=KV_PASSWORD
 
-# The following is necessary so that the redis user which runs the redis process inside of the container
-# can have write access to the flightctl-kv volume
-PodmanArgs="--userns=keep-id:uid=999,gid=999"
-
-Volume=flightctl-kv:/var/lib/redis/data:Z,U
 Volume=/usr/share/flightctl/flightctl-kv/redis.conf:/usr/local/etc/redis/redis.conf
 
 [Service]

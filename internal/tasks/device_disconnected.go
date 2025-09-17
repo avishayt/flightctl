@@ -40,7 +40,7 @@ func (t *DeviceDisconnected) Poll(ctx context.Context) {
 
 	// Create a field selector to only get devices that haven't been seen for more than DeviceDisconnectedTimeout
 	// and don't already have "Unknown" status to avoid reprocessing the same devices
-	fieldSelectorStr := fmt.Sprintf("status.lastSeen<%s,status.summary.status!=Unknown", cutoffTime.Format(time.RFC3339))
+	fieldSelectorStr := fmt.Sprintf("lastSeen<%s,status.summary.status!=Unknown", cutoffTime.Format(time.RFC3339))
 
 	// List devices that match the disconnection criteria with pagination
 	listParams := api.ListDevicesParams{

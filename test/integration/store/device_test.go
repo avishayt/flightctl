@@ -1303,7 +1303,7 @@ var _ = Describe("DeviceStore create", func() {
 					Os: &api.DeviceOsSpec{Image: "test-image"},
 				},
 				Status: &api.DeviceStatus{
-					LastSeen: time.Now(),
+					LastSeen: lo.ToPtr(time.Now()),
 					Summary: api.DeviceSummaryStatus{
 						Status: api.DeviceSummaryStatusOnline,
 						Info:   lo.ToPtr("Device is online"),
@@ -1360,9 +1360,9 @@ var _ = Describe("DeviceStore create", func() {
 			// Check that existing annotation was preserved
 			Expect(annotations["existing-annotation"]).To(Equal("existing-value"))
 
-			// Check that lastSeen was cleared (should be zero time)
+			// Check that lastSeen was cleared (should be nil)
 			Expect(device.Status).ToNot(BeNil())
-			Expect(device.Status.LastSeen.IsZero()).To(BeTrue())
+			Expect(device.Status.LastSeen).To(BeNil())
 
 			// Check that status summary was set to waiting for connection
 			Expect(device.Status.Summary.Status).To(Equal(api.DeviceSummaryStatusAwaitingReconnect))
@@ -1410,8 +1410,8 @@ var _ = Describe("DeviceStore create", func() {
 			Expect(updatedDevice.Status.Summary.Info).ToNot(BeNil())
 			Expect(*updatedDevice.Status.Summary.Info).To(Equal("Device is waiting for connection after restore"))
 
-			// Check that lastSeen is zero (not set)
-			Expect(updatedDevice.Status.LastSeen.IsZero()).To(BeTrue())
+			// Check that lastSeen is nil (not set)
+			Expect(updatedDevice.Status.LastSeen).To(BeNil())
 		})
 
 		It("PrepareDevicesAfterRestore excludes decommissioned and decommissioning devices", func() {
@@ -1431,7 +1431,7 @@ var _ = Describe("DeviceStore create", func() {
 					},
 				},
 				Status: &api.DeviceStatus{
-					LastSeen: time.Now(),
+					LastSeen: lo.ToPtr(time.Now()),
 					Summary: api.DeviceSummaryStatus{
 						Status: api.DeviceSummaryStatusOnline,
 						Info:   lo.ToPtr("Device is online"),
@@ -1477,7 +1477,7 @@ var _ = Describe("DeviceStore create", func() {
 					},
 				},
 				Status: &api.DeviceStatus{
-					LastSeen: time.Now(),
+					LastSeen: lo.ToPtr(time.Now()),
 					Summary: api.DeviceSummaryStatus{
 						Status: api.DeviceSummaryStatusOnline,
 						Info:   lo.ToPtr("Device is online"),
@@ -1520,7 +1520,7 @@ var _ = Describe("DeviceStore create", func() {
 					Os: &api.DeviceOsSpec{Image: "test-image"},
 				},
 				Status: &api.DeviceStatus{
-					LastSeen: time.Now(),
+					LastSeen: lo.ToPtr(time.Now()),
 					Summary: api.DeviceSummaryStatus{
 						Status: api.DeviceSummaryStatusOnline,
 						Info:   lo.ToPtr("Device is online"),
@@ -1620,7 +1620,7 @@ var _ = Describe("DeviceStore create", func() {
 
 			// Should have lastSeen cleared
 			Expect(normalDeviceAfter.Status).ToNot(BeNil())
-			Expect(normalDeviceAfter.Status.LastSeen.IsZero()).To(BeTrue(), "Normal device SHOULD have lastSeen cleared")
+			Expect(normalDeviceAfter.Status.LastSeen).To(BeNil(), "Normal device SHOULD have lastSeen cleared")
 
 			// Should have status summary changed to awaiting reconnect
 			Expect(normalDeviceAfter.Status.Summary.Status).To(Equal(api.DeviceSummaryStatusAwaitingReconnect), "Normal device SHOULD have status summary changed to AwaitingReconnect")

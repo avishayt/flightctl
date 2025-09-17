@@ -84,6 +84,13 @@ func (f *TableFormatter) formatList(w *tabwriter.Writer, data interface{}, optio
 func (f *TableFormatter) formatSingle(w *tabwriter.Writer, data interface{}, options FormatOptions) error {
 	switch {
 	case strings.EqualFold(options.Kind, api.DeviceKind):
+		if getLastSeenResponse, ok := data.(*apiclient.GetDeviceLastSeenResponse); ok {
+			// Handle 204 response (no content) when lastSeen is not set
+			if getLastSeenResponse.JSON200 == nil {
+				return f.printDevicesLastSeenTable(w, nil)
+			}
+			return f.printDevicesLastSeenTable(w, getLastSeenResponse.JSON200)
+		}
 		var device api.Device
 		if getRenderedResponse, ok := data.(*apiclient.GetRenderedDeviceResponse); ok {
 			device = *getRenderedResponse.JSON200
@@ -148,29 +155,45 @@ func (f *TableFormatter) printDevicesSummaryTable(w *tabwriter.Writer, summary *
 	return nil
 }
 
+func (f *TableFormatter) printDevicesLastSeenTable(w *tabwriter.Writer, lastSeen *api.DeviceLastSeen) error {
+	f.printHeaderRowLn(w, "LAST SEEN", "TIME AGO")
+	if lastSeen == nil {
+		f.printTableRowLn(w, NoneString, NoneString)
+	} else {
+		f.printTableRowLn(w, lastSeen.LastSeen.Format(time.RFC3339), humanize.Time(lastSeen.LastSeen))
+	}
+	return nil
+}
+
 func (f *TableFormatter) printDevicesTable(w *tabwriter.Writer, wide bool, devices ...api.Device) error {
 	if wide {
-		f.printHeaderRowLn(w, "NAME", "ALIAS", "OWNER", "SYSTEM", "UPDATED", "APPLICATIONS", "LAST SEEN", "LABELS")
+		f.printHeaderRowLn(w, "NAME", "ALIAS", "OWNER", "SYSTEM", "UPDATED", "APPLICATIONS", "LABELS")
 	} else {
-		f.printHeaderRowLn(w, "NAME", "ALIAS", "OWNER", "SYSTEM", "UPDATED", "APPLICATIONS", "LAST SEEN")
+		f.printHeaderRowLn(w, "NAME", "ALIAS", "OWNER", "SYSTEM", "UPDATED", "APPLICATIONS")
 	}
 	for _, d := range devices {
-		lastSeen := "<never>"
-		if !d.Status.LastSeen.IsZero() {
-			lastSeen = humanize.Time(d.Status.LastSeen)
-		}
 		alias := ""
 		if d.Metadata.Labels != nil {
 			alias = (*d.Metadata.Labels)["alias"]
 		}
+
+		// Handle nil status gracefully
+		summaryStatus := "Unknown"
+		updatedStatus := "Unknown"
+		applicationsStatus := "Unknown"
+		if d.Status != nil {
+			summaryStatus = string(d.Status.Summary.Status)
+			updatedStatus = string(d.Status.Updated.Status)
+			applicationsStatus = string(d.Status.ApplicationsSummary.Status)
+		}
+
 		f.printTableRow(w,
 			*d.Metadata.Name,
 			alias,
 			util.DefaultIfNil(d.Metadata.Owner, NoneString),
-			string(d.Status.Summary.Status),
-			string(d.Status.Updated.Status),
-			string(d.Status.ApplicationsSummary.Status),
-			lastSeen,
+			summaryStatus,
+			updatedStatus,
+			applicationsStatus,
 		)
 		if wide {
 			f.printTableRowLn(w, "", strings.Join(util.LabelMapToArray(d.Metadata.Labels), ","))

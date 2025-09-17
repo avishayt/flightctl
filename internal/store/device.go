@@ -57,6 +57,7 @@ type Device interface {
 	GetRendered(ctx context.Context, orgId uuid.UUID, name string, knownRenderedVersion *string, consoleGrpcEndpoint string) (*api.Device, error)
 	Healthcheck(ctx context.Context, orgId uuid.UUID, names []string) error
 	GetWithoutServiceConditions(ctx context.Context, orgId uuid.UUID, name string) (*api.Device, error)
+	GetLastSeen(ctx context.Context, orgId uuid.UUID, name string) (*time.Time, error)
 
 	// Used internally
 	UpdateAnnotations(ctx context.Context, orgId uuid.UUID, name string, annotations map[string]string, deleteKeys []string) error
@@ -750,6 +751,18 @@ func (s *DeviceStore) GetWithoutServiceConditions(ctx context.Context, orgId uui
 	return deviceModel.ToApiResource(model.WithoutServiceConditions())
 }
 
+func (s *DeviceStore) GetLastSeen(ctx context.Context, orgId uuid.UUID, name string) (*time.Time, error) {
+	deviceModel := model.Device{
+		Resource: model.Resource{OrgID: orgId, Name: name},
+	}
+	result := s.getDB(ctx).Take(&deviceModel)
+	if result.Error != nil {
+		return nil, ErrorFromGormError(result.Error)
+	}
+
+	return deviceModel.LastSeen, nil
+}
+
 func (s *DeviceStore) setServiceConditions(ctx context.Context, orgId uuid.UUID, name string, conditions []api.Condition, callback ServiceConditionsCallback) (retry bool, err error) {
 	existingRecord := model.Device{Resource: model.Resource{OrgID: orgId, Name: name}}
 	result := s.getDB(ctx).Take(&existingRecord)
@@ -1005,7 +1018,8 @@ func (s *DeviceStore) PrepareDevicesAfterRestore(ctx context.Context) (int64, er
 				ELSE 
 					jsonb_build_object('summary', jsonb_build_object('status', $2::text, 'info', $3::text))
 			END,
-			resource_version = COALESCE(resource_version, 0) + 1
+			resource_version = COALESCE(resource_version, 0) + 1,
+			last_seen = NULL
 		WHERE deleted_at IS NULL 
 			AND NOT (status->'lifecycle'->>'status') IN ($4, $5)
 			AND (annotations->>$1) IS DISTINCT FROM 'true'
